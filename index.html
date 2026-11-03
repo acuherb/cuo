@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>错题舱 · 单文件 MVP（DeepSeek 版）</title>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#fff; --line:#e3e6ea; --text:#1f2328; --muted:#6b7280;
+  --brand:#3b6ef6; --brand2:#eaf0ff; --ok:#16a34a; --warn:#f59e0b; --bad:#ef4444;
+  --radius:12px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);padding-bottom:40px}
+#app{max-width:820px;margin:0 auto;padding:0 12px}
+.topbar{display:flex;align-items:baseline;gap:10px;padding:16px 4px 8px}
+.brand{font-size:20px;font-weight:700}
+.tag{font-size:11px;background:var(--brand2);color:var(--brand);padding:2px 6px;border-radius:6px;vertical-align:middle}
+.sub{font-size:12px;color:var(--muted)}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:6px 0 10px;position:sticky;top:0;background:var(--bg);z-index:20}
+.tabs button{flex:0 0 auto;border:1px solid var(--line);background:#fff;color:var(--muted);padding:7px 12px;border-radius:999px;font-size:14px;cursor:pointer}
+.tabs button.active{background:var(--brand);border-color:var(--brand);color:#fff}
+.view{display:none}
+.view.active{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+.card h3{margin:0 0 10px;font-size:15px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hint{font-size:12px;color:var(--muted);margin-top:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:#fff;color:var(--text);padding:9px 14px;border-radius:10px;font-size:14px;cursor:pointer;user-select:none}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.ghost{background:#fff}
+.btn.danger{background:#fff;border-color:#f3c2c2;color:var(--bad)}
+.btn.tiny{padding:4px 8px;font-size:12px;border-radius:8px}
+.thumbs{display:flex;gap:8px;overflow-x:auto;margin-top:12px}
+.thumb{flex:0 0 64px;width:64px;height:64px;border-radius:8px;overflow:hidden;border:2px solid transparent;cursor:pointer;background:#eee}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb.active{border-color:var(--brand)}
+.stage{position:relative;width:100%;background:#eee;border-radius:10px;overflow:hidden;touch-action:none}
+.stage img{display:block;width:100%;height:auto;pointer-events:none;user-select:none}
+.boxLayer{position:absolute;inset:0;cursor:crosshair}
+.box{position:absolute;border:2px solid var(--brand);background:rgba(59,110,246,.08);border-radius:4px;pointer-events:none}
+.box.saved{border-color:rgba(22,163,74,.7);background:rgba(22,163,74,.06)}
+.box.pending{border-color:var(--warn);background:rgba(245,158,11,.12)}
+.box.draft{border-style:dashed}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.form input,.form select,.form textarea{border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:14px;color:var(--text);background:#fff;font-family:inherit}
+.form label:last-child{grid-column:1/-1}
+.list{display:flex;flex-direction:column;gap:10px}
+.empty{color:var(--muted);font-size:13px;padding:16px;text-align:center}
+.crop{position:relative;overflow:hidden;background:#fff;border-radius:8px}
+.crop img{position:absolute;max-width:none;display:block;user-select:none;pointer-events:none}
+.qcard{display:flex;gap:12px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:12px}
+.qthumb{width:120px;flex:0 0 120px;border:1px solid var(--line)}
+.qinfo{flex:1;min-width:0;font-size:13px}
+.qtitle{font-weight:600;font-size:14px;margin-bottom:2px}
+.qmeta{color:var(--muted);font-size:12px}
+.pill{font-size:11px;background:var(--brand2);color:var(--brand);padding:1px 6px;border-radius:6px;font-weight:400;margin-left:4px}
+.bar{height:6px;background:#eef1f5;border-radius:99px;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:var(--brand);border-radius:99px}
+.bigNum{font-size:44px;font-weight:700;line-height:1.1;text-align:center;margin:8px 0 2px}
+.gradeGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.grade{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 8px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:14px;cursor:pointer}
+.grade small{font-size:11px;color:var(--muted)}
+.grade.easy{border-color:#bfe3c9}.grade.easy small{color:var(--ok)}
+.grade.hard{border-color:#f3dfb0}.grade.hard small{color:var(--warn)}
+.grade.forgot,.grade.wrong{border-color:#f3c2c2}.grade.forgot small,.grade.wrong small{color:var(--bad)}
+.statGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:12px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}
+.stat .v{font-size:22px;font-weight:700}
+.stat .k{font-size:12px;color:var(--muted)}
+.chartRow{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
+.cl{flex:0 0 92px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cbar{flex:1;height:10px;background:#eef1f5;border-radius:99px;overflow:hidden}
+.cbar i{display:block;height:100%;background:var(--brand);border-radius:99px}
+.cbar.warn i{background:var(--warn)}
+.cn{flex:0 0 44px;text-align:right;color:var(--muted);font-size:12px}
+.paperRow{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line);border-radius:10px;font-size:13px;cursor:pointer}
+.paperRow .crop{width:84px;flex:0 0 84px}
+.switch{display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:10px}
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:#1f2328;color:#fff;padding:10px 16px;border-radius:99px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:99}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.aiBadge{font-size:11px;background:#e6f7ee;color:#16a34a;padding:2px 6px;border-radius:6px;margin-left:6px}
+.smallBtn{padding:5px 10px;font-size:12px;border-radius:8px}
+#printArea{display:none}
+@media print{
+  #app{display:none!important}
+  #printArea{display:block!important}
+  body{background:#fff;padding:0}
+  .printTitle{font-size:18px;margin:0 0 16px;text-align:center}
+  .printItem{page-break-inside:avoid;break-inside:avoid;margin-bottom:18px}
+  .printHead{font-size:13px;font-weight:600;margin-bottom:6px}
+  .printItem .crop{max-width:560px;border:1px solid #ddd}
+  .printSpace{height:110px;border-bottom:1px dashed #ccc;margin-top:8px}
+  .printAnswer{font-size:13px;background:#f7f7f7;padding:8px;border-radius:6px;margin-top:6px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">错题舱 <span class="tag">MVP · DeepSeek</span></div>
+    <div class="sub" id="topStatus">本地存储 · 无需联网</div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-view="capture" class="active">录题</button>
+    <button data-view="bank">错题库</button>
+    <button data-view="review">复习</button>
+    <button data-view="stats">诊断</button>
+    <button data-view="paper">组卷</button>
+    <button data-view="settings">设置</button>
+  </nav>
+
+  <main>
+    <!-- 录题 -->
+    <section id="view-capture" class="view active">
+      <div class="card">
+        <div class="row">
+          <label class="btn primary">
+            拍照 / 选图
+            <input type="file" id="fileInput" accept="image/*" multiple hidden>
+          </label>
+          <button class="btn ghost" id="aiDetectBtn" hidden>AI 自动框选 <span class="aiBadge">DeepSeek</span></button>
+        </div>
+        <div class="hint">支持一次多选；图片只存在本机浏览器里，不上传任何服务器。</div>
+        <div class="thumbs" id="imgThumbs"></div>
+      </div>
+
+      <div class="card" id="stageCard" hidden>
+        <div class="stage" id="stage">
+          <img id="stageImg" alt="">
+          <div class="boxLayer" id="boxLayer"></div>
+        </div>
+        <div class="hint">在图片上拖动，框出一道题；松手后填写信息并收录。绿框是已收录的题。</div>
+        <div class="boxList" id="boxList"></div>
+      </div>
+
+      <div class="card" id="boxFormCard" hidden>
+        <h3>收录这道题</h3>
+        <div class="form">
+          <label>学科<input id="fSubject" list="dlSubject" placeholder="数学"></label>
+          <label>册次<input id="fBook" placeholder="八上"></label>
+          <label>单元<input id="fUnit" placeholder="行程问题"></label>
+          <label>知识点<input id="fKnowledge" list="dlKnowledge" placeholder="相遇问题"></label>
+          <label>错因
+            <select id="fCause">
+              <option value="知识缺口">知识缺口（概念没懂）</option>
+              <option value="计算执行">计算执行（会做算错）</option>
+              <option value="审题偏差">审题偏差（漏条件/看错）</option>
+              <option value="思维路径">思维路径（思路断/列不出式）</option>
+              <option value="习惯问题">习惯问题（时间/没检查）</option>
+            </select>
+          </label>
+          <label>备注 / 答案 / 解析<textarea id="fNote" rows="2" placeholder="可写正确答案、关键步骤或易错点"></textarea></label>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary" id="saveBoxBtn">收录此题</button>
+          <button class="btn ghost" id="cancelBoxBtn">取消</button>
+          <button class="btn ghost smallBtn" id="aiSuggestBtn" hidden>AI 建议知识点/错因</button>
+        </div>
+      </div>
+
+      <datalist id="dlSubject"><option>数学</option><option>语文</option><option>英语</option><option>物理</option><option>化学</option></datalist>
+      <datalist id="dlKnowledge">
+        <option>相遇问题</option><option>追及问题</option><option>平均速度</option>
+        <option>流水行船</option><option>环形跑道</option><option>火车过桥</option>
+      </datalist>
+    </section>
+
+    <!-- 错题库 -->
+    <section id="view-bank" class="view">
+      <div class="card">
+        <div class="row">
+          <select id="bankCause" class="btn ghost">
+            <option value="">全部错因</option>
+            <option>知识缺口</option><option>计算执行</option><option>审题偏差</option>
+            <option>思维路径</option><option>习惯问题</option>
+          </select>
+          <input id="bankKw" class="btn ghost" style="flex:1;min-width:120px" placeholder="搜索知识点 / 备注">
+        </div>
+        <div class="hint" id="bankCount"></div>
+      </div>
+      <div id="bankList" class="list"></div>
+    </section>
+
+    <!-- 复习 -->
+    <section id="view-review" class="view">
+      <div class="card" id="reviewHome">
+        <div class="bigNum" id="dueCount">0</div>
+        <div class="hint" style="text-align:center">道题今天该复习</div>
+        <div class="row" style="justify-content:center;margin-top:14px">
+          <button class="btn primary" id="startReviewBtn">开始复习</button>
+        </div>
+      </div>
+      <div class="card" id="reviewCard" hidden>
+        <div class="hint" id="reviewMeta"></div>
+        <div id="reviewImg" style="margin-top:10px"></div>
+        <details id="reviewNote" style="margin-top:10px">
+          <summary style="cursor:pointer;font-size:13px;color:var(--muted)">看备注 / 答案</summary>
+          <div id="reviewNoteText" style="font-size:13px;margin-top:6px"></div>
+        </details>
+        <div class="gradeGrid">
+          <button class="grade easy" data-grade="easy">想起来了<small>下次更久</small></button>
+          <button class="grade hard" data-grade="hard">有点犹豫<small>保持间隔</small></button>
+          <button class="grade forgot" data-grade="forgot">完全忘了<small>明天再见</small></button>
+          <button class="grade wrong" data-grade="wrong">又错了<small>明天再见</small></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 诊断 -->
+    <section id="view-stats" class="view">
+      <div class="statGrid" id="statGrid"></div>
+      <div class="card"><h3>错因分布</h3><div id="causeChart"></div></div>
+      <div class="card"><h3>薄弱知识点（掌握度从低到高）</h3><div id="knowledgeChart"></div></div>
+    </section>
+
+    <!-- 组卷 -->
+    <section id="view-paper" class="view">
+      <div class="card">
+        <div class="row">
+          <select id="paperScope" class="btn ghost">
+            <option value="todo">待攻克（掌握度低）</option>
+            <option value="due">今日待复习</option>
+            <option value="all">全部题目</option>
+          </select>
+          <select id="paperMode" class="btn ghost">
+            <option value="blank">空白卷</option>
+            <option value="self">自测卷</option>
+            <option value="answer">解析卷</option>
+          </select>
+          <button class="btn primary" id="buildPaperBtn">生成并打印</button>
+        </div>
+        <div class="hint">勾选要练的题，生成后走浏览器打印，可另存为 PDF。</div>
+      </div>
+      <div class="card"><div id="paperList" class="list"></div></div>
+    </section>
+
+    <!-- 设置 -->
+    <section id="view-settings" class="view">
+      <div class="card">
+        <h3>DeepSeek AI 辅助（可选）</h3>
+        <label class="switch"><input type="checkbox" id="aiEnabled"> 启用 AI（自动框选 / 建议知识点）</label>
+        <div class="form">
+          <label>API Base<input id="aiBase" placeholder="https://api.deepseek.com"></label>
+          <label>API Key<input id="aiKey" type="password" placeholder="sk-..."></label>
+          <label>模型<input id="aiModel" placeholder="deepseek-flash"></label>
+          <label>API 路径<input id="aiPath" placeholder="/chat/completions"></label>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary" id="saveSettingsBtn">保存设置</button>
+          <button class="btn ghost" id="testAIBtn">测试连接</button>
+        </div>
+        <div class="hint">默认已填好 DeepSeek 官方地址和 <code>deepseek-flash</code> 视觉模型。Key 只保存在本机 localStorage，只会发给你填写的 API 服务。不填也能完整使用离线功能。</div>
+      </div>
+      <div class="card">
+        <h3>数据</h3>
+        <div class="row">
+          <button class="btn ghost" id="exportBtn">导出 JSON 备份</button>
+          <label class="btn ghost">导入 JSON<input type="file" id="importInput" accept=".json" hidden></label>
+          <button class="btn danger" id="clearBtn">清空全部</button>
+        </div>
+        <div class="hint">换设备、换浏览器前先导出，导入后图片和题目都会恢复。</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="printArea"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+/* ================= 基础工具 ================= */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const DAY = 86400000;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let toastTimer;
+function toast(msg){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+function readImageSize(file){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(url); };
+    img.onerror = () => { reject(new Error('图片读取失败')); URL.revokeObjectURL(url); };
+    img.src = url;
+  });
+}
+function blobToDataURL(b){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(b);
+  });
+}
+function dataURLToBlob(d){
+  const [head, body] = d.split(',');
+  const mime = (head.match(/:(.*?);/) || [])[1] || 'image/jpeg';
+  const bin = atob(body);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+/* DeepSeek 返回的 JSON 有时会被 ```json ... ``` 包住，这里做容错解析 */
+function parseJSONSafe(text){
+  if (!text) throw new Error('AI 返回为空');
+  let s = String(text).trim();
+  // 去掉 markdown 代码块
+  s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  // 尝试找第一个 { 到最后一个 }
+  const first = s.indexOf('{');
+  const last = s.lastIndexOf('}');
+  if (first >= 0 && last > first) s = s.slice(first, last + 1);
+  return JSON.parse(s);
+}
+
+/* ================= IndexedDB ================= */
+const DB_NAME = 'cuoti-mvp', DB_VER = 1;
+let db = null;
+
+function openDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = () => {
+      const d = req.result;
+      if (!d.objectStoreNames.contains('images')) d.createObjectStore('images', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('questions')) {
+        const s = d.createObjectStore('questions', { keyPath: 'id' });
+        s.createIndex('dueAt', 'dueAt');
+        s.createIndex('knowledge', 'knowledge');
+        s.createIndex('cause', 'cause');
+      }
+    };
+    req.onsuccess = () => { db = req.result; resolve(db); };
+    req.onerror = () => reject(req.error);
+  });
+}
+function idbAll(store){
+  return new Promise((res, rej) => {
+    const r = db.transaction(store).objectStore(store).getAll();
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+function idbPut(store, val){
+  return new Promise((res, rej) => {
+    const r = db.transaction(store, 'readwrite').objectStore(store).put(val);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+function idbDel(store, key){
+  return new Promise((res, rej) => {
+    const r = db.transaction(store, 'readwrite').objectStore(store).delete(key);
+    r.onsuccess = () => res();
+    r.onerror = () => rej(r.error);
+  });
+}
+function idbClear(store){
+  return new Promise((res, rej) => {
+    const r = db.transaction(store, 'readwrite').objectStore(store).clear();
+    r.onsuccess = () => res();
+    r.onerror = () => rej(r.error);
+  });
+}
+
+/* ================= 状态 ================= */
+const state = {
+  images: [],
+  questions: [],
+  capture: { currentImageId: null, pendingBox: null, aiQueue: [] },
+  review: { queue: [], idx: 0 },
+};
+const urlCache = new Map();
+function imgURL(id){ return urlCache.get(id) || ''; }
+
+async function loadAll(){
+  const imgs = await idbAll('images');
+  for (const im of imgs) {
+    if (!urlCache.has(im.id)) urlCache.set(im.id, URL.createObjectURL(im.blob));
+  }
+  state.images = imgs.map(({ blob, ...rest }) => rest);
+  state.questions = await idbAll('questions');
+}
+
+/* ================= 图片裁剪展示 ================= */
+function cropEl(q){
+  const img = state.images.find(i => i.id === q.imageId);
+  const box = q.box;
+  const div = document.createElement('div');
+  div.className = 'crop';
+  if (!img || !box || !box.w || !box.h) {
+    div.style.height = '60px';
+    div.textContent = '图片缺失';
+    return div;
+  }
+  div.style.aspectRatio = String((box.w * img.w) / (box.h * img.h));
+  const im = document.createElement('img');
+  im.src = imgURL(img.id);
+  im.style.width = (100 / box.w) + '%';
+  im.style.left = (-box.x / box.w * 100) + '%';
+  im.style.top = (-box.y / box.h * 100) + '%';
+  div.appendChild(im);
+  return div;
+}
+
+/* 把某道题的裁剪区域导出为 dataURL（供 DeepSeek 视觉使用） */
+async function cropToDataURL(q, maxWidth = 1200){
+  const img = state.images.find(i => i.id === q.imageId);
+  if (!img) throw new Error('图片缺失');
+  const blob = await (await fetch(imgURL(img.id))).blob();
+  const dataUrl = await blobToDataURL(blob);
+  const image = await new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = rej;
+    im.src = dataUrl;
+  });
+  const sx = q.box.x * image.naturalWidth;
+  const sy = q.box.y * image.naturalHeight;
+  const sw = q.box.w * image.naturalWidth;
+  const sh = q.box.h * image.naturalHeight;
+  const scale = Math.min(1, maxWidth / sw);
+  const cw = Math.max(1, Math.round(sw * scale));
+  const ch = Math.max(1, Math.round(sh * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = cw; canvas.height = ch;
+  canvas.getContext('2d').drawImage(image, sx, sy, sw, sh, 0, 0, cw, ch);
+  return canvas.toDataURL('image/jpeg', 0.88);
+}
+
+/* ================= 间隔复习算法 ================= */
+const INTERVALS = [1, 2, 4, 7, 15, 30, 60];
+function mastery(q){ return Math.round(((q.level || 0) / (INTERVALS.length - 1)) * 100); }
+function isTodo(q){ return (q.level || 0) <= 1; }
+function nextSchedule(q, grade){
+  let level = q.level || 0;
+  if (grade === 'easy') level = Math.min(level + 1, INTERVALS.length - 1);
+  else if (grade === 'hard') level = level;
+  else level = 0;
+  const days = INTERVALS[level];
+  return {
+    level,
+    dueAt: Date.now() + days * DAY,
+    lastReviewedAt: Date.now(),
+    reviewCount: (q.reviewCount || 0) + 1,
+    lapses: (q.lapses || 0) + (grade === 'wrong' ? 1 : 0),
+  };
+}
+
+/* ================= 视图切换 ================= */
+function switchView(name){
+  $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
+  $$('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+  if (name === 'bank') renderBank();
+  if (name === 'review') renderReviewHome();
+  if (name === 'stats') renderStats();
+  if (name === 'paper') renderPaperList();
+  if (name === 'capture') renderCapture();
+}
+
+/* ================= 录题：图片 ================= */
+async function handleFiles(files){
+  for (const f of files) {
+    try {
+      const { w, h } = await readImageSize(f);
+      const rec = { id: uid(), blob: f, w, h, name: f.name, createdAt: Date.now() };
+      await idbPut('images', rec);
+      urlCache.set(rec.id, URL.createObjectURL(f));
+      state.images.push({ id: rec.id, name: rec.name, w: rec.w, h: rec.h, createdAt: rec.createdAt });
+      if (!state.capture.currentImageId) state.capture.currentImageId = rec.id;
+    } catch (e) {
+      toast('图片读取失败：' + f.name);
+    }
+  }
+  renderCapture();
+}
+
+function renderCapture(){
+  const cur = state.capture.currentImageId;
+  const thumbs = $('#imgThumbs');
+  thumbs.innerHTML = '';
+  state.images.slice().reverse().forEach(im => {
+    const d = document.createElement('div');
+    d.className = 'thumb' + (im.id === cur ? ' active' : '');
+    const i = document.createElement('img');
+    i.src = imgURL(im.id);
+    d.appendChild(i);
+    d.onclick = () => {
+      state.capture.currentImageId = im.id;
+      state.capture.pendingBox = null;
+      state.capture.aiQueue = [];
+      $('#boxFormCard').hidden = true;
+      renderCapture();
+    };
+    thumbs.appendChild(d);
+  });
+
+  const stageCard = $('#stageCard');
+  if (!cur) { stageCard.hidden = true; $('#boxFormCard').hidden = true; return; }
+  stageCard.hidden = false;
+  $('#stageImg').src = imgURL(cur);
+  renderBoxes();
+}
+
+/* ================= 录题：框选 ================= */
+let drag = null;
+const boxLayer = $('#boxLayer');
+
+function setBoxStyle(el, b){
+  el.style.left = (b.x * 100) + '%';
+  el.style.top = (b.y * 100) + '%';
+  el.style.width = (b.w * 100) + '%';
+  el.style.height = (b.h * 100) + '%';
+}
+
+function renderBoxes(){
+  boxLayer.innerHTML = '';
+  const cur = state.capture.currentImageId;
+  state.questions.filter(q => q.imageId === cur).forEach(q => {
+    const d = document.createElement('div');
+    d.className = 'box saved';
+    setBoxStyle(d, q.box);
+    boxLayer.appendChild(d);
+  });
+  if (state.capture.pendingBox) {
+    const d = document.createElement('div');
+    d.className = 'box pending';
+    setBoxStyle(d, state.capture.pendingBox);
+    boxLayer.appendChild(d);
+  }
+}
+
+function setupStage(){
+  boxLayer.addEventListener('pointerdown', e => {
+    if (!state.capture.currentImageId) return;
+    if (state.capture.pendingBox) { toast('请先收录或取消当前这道题'); return; }
+    const r = boxLayer.getBoundingClientRect();
+    drag = {
+      x0: (e.clientX - r.left) / r.width,
+      y0: (e.clientY - r.top) / r.height,
+      r,
+      el: document.createElement('div'),
+    };
+    drag.el.className = 'box draft';
+    boxLayer.appendChild(drag.el);
+    boxLayer.setPointerCapture(e.pointerId);
+  });
+
+  boxLayer.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const r = drag.r;
+    const x = clamp((e.clientX - r.left) / r.width, 0, 1);
+    const y = clamp((e.clientY - r.top) / r.height, 0, 1);
+    const bx = Math.min(drag.x0, x), by = Math.min(drag.y0, y);
+    const bw = Math.abs(x - drag.x0), bh = Math.abs(y - drag.y0);
+    drag.box = { x: bx, y: by, w: bw, h: bh };
+    setBoxStyle(drag.el, drag.box);
+  });
+
+  boxLayer.addEventListener('pointerup', () => {
+    if (!drag) return;
+    const b = drag.box;
+    drag.el.remove();
+    drag = null;
+    if (!b || b.w < 0.02 || b.h < 0.02) return;
+    state.capture.pendingBox = b;
+    showBoxForm();
+  });
+
+  boxLayer.addEventListener('pointercancel', () => {
+    if (drag) { drag.el.remove(); drag = null; }
+  });
+}
+
+function showBoxForm(){
+  $('#boxFormCard').hidden = false;
+  $('#aiSuggestBtn').hidden = !settings.aiEnabled;
+  renderBoxes();
+  $('#boxFormCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function saveBox(){
+  const b = state.capture.pendingBox;
+  const imgId = state.capture.currentImageId;
+  if (!b || !imgId) return;
+  const q = {
+    id: uid(),
+    imageId: imgId,
+    box: b,
+    subject: $('#fSubject').value.trim() || '未分类',
+    book: $('#fBook').value.trim(),
+    unit: $('#fUnit').value.trim(),
+    knowledge: $('#fKnowledge').value.trim() || '未标注',
+    cause: $('#fCause').value,
+    note: $('#fNote').value.trim(),
+    level: 0,
+    dueAt: Date.now(),
+    createdAt: Date.now(),
+    reviewCount: 0,
+    lapses: 0,
+    lastReviewedAt: null,
+  };
+  await idbPut('questions', q);
+  state.questions.push(q);
+  state.capture.pendingBox = null;
+  $('#fNote').value = '';
+  renderBoxes();
+  toast('已收录：' + q.knowledge);
+
+  if (state.capture.aiQueue.length) {
+    state.capture.pendingBox = state.capture.aiQueue.shift();
+    showBoxForm();
+  } else {
+    $('#boxFormCard').hidden = true;
+  }
+}
+
+/* ================= 错题库 ================= */
+function questionCard(q, actions = true){
+  const el = document.createElement('div');
+  el.className = 'qcard';
+  const thumb = cropEl(q);
+  thumb.classList.add('qthumb');
+  el.appendChild(thumb);
+
+  const info = document.createElement('div');
+  info.className = 'qinfo';
+  info.innerHTML = `
+    <div class="qtitle">${esc(q.knowledge)}<span class="pill">${esc(q.cause)}</span></div>
+    <div class="qmeta">${esc([q.subject, q.book, q.unit].filter(Boolean).join(' · '))}</div>
+    <div class="bar"><i style="width:${mastery(q)}%"></i></div>
+    <div class="qmeta">掌握度 ${mastery(q)}% · ${dueText(q)}</div>
+  `;
+  if (actions) {
+    const del = document.createElement('button');
+    del.className = 'btn tiny ghost';
+    del.style.marginTop = '6px';
+    del.textContent = '删除';
+    del.onclick = async () => {
+      if (!confirm('删除这道题？')) return;
+      await idbDel('questions', q.id);
+      state.questions = state.questions.filter(x => x.id !== q.id);
+      renderBank(); renderCapture(); renderReviewHome();
+    };
+    info.appendChild(del);
+  }
+  el.appendChild(info);
+  return el;
+}
+
+function dueText(q){
+  const d = q.dueAt - Date.now();
+  if (d <= 0) return '今天该复习';
+  return Math.ceil(d / DAY) + ' 天后复习';
+}
+
+function renderBank(){
+  const cause = $('#bankCause').value;
+  const kw = $('#bankKw').value.trim();
+  let list = state.questions.slice().sort((a, b) => b.createdAt - a.createdAt);
+  if (cause) list = list.filter(q => q.cause === cause);
+  if (kw) list = list.filter(q => (q.knowledge + q.note + q.unit + q.book).includes(kw));
+  $('#bankCount').textContent = `共 ${list.length} 道题`;
+  const box = $('#bankList');
+  box.innerHTML = '';
+  if (!list.length) { box.innerHTML = '<div class="empty">还没有错题，去「录题」添加吧</div>'; return; }
+  list.forEach(q => box.appendChild(questionCard(q)));
+}
+
+/* ================= 复习 ================= */
+function renderReviewHome(){
+  const due = state.questions.filter(q => q.dueAt <= Date.now());
+  $('#dueCount').textContent = due.length;
+  $('#reviewHome').hidden = false;
+  $('#reviewCard').hidden = true;
+}
+
+function startReview(){
+  const due = state.questions.filter(q => q.dueAt <= Date.now()).sort((a, b) => a.dueAt - b.dueAt);
+  if (!due.length) { toast('今天没有待复习的题'); return; }
+  state.review = { queue: due, idx: 0 };
+  renderReviewCard();
+}
+
+function renderReviewCard(){
+  const s = state.review;
+  if (s.idx >= s.queue.length) {
+    $('#reviewCard').hidden = true;
+    $('#reviewHome').hidden = false;
+    renderReviewHome();
+    toast('本轮复习完成');
+    return;
+  }
+  const q = s.queue[s.idx];
+  $('#reviewHome').hidden = true;
+  $('#reviewCard').hidden = false;
+  $('#reviewMeta').textContent = `${s.idx + 1} / ${s.queue.length} · ${[q.subject, q.unit, q.knowledge].filter(Boolean).join(' · ')} · ${q.cause}`;
+  const holder = $('#reviewImg');
+  holder.innerHTML = '';
+  holder.appendChild(cropEl(q));
+  $('#reviewNoteText').textContent = q.note || '（无备注）';
+  $('#reviewNote').open = false;
+}
+
+async function grade(g){
+  const q = state.review.queue[state.review.idx];
+  const updated = nextSchedule(q, g);
+  await idbPut('questions', Object.assign({}, q, updated));
+  Object.assign(q, updated);
+  state.review.idx++;
+  renderReviewCard();
+}
+
+/* ================= 诊断 ================= */
+function renderStats(){
+  const qs = state.questions;
+  const total = qs.length;
+  const avg = total ? Math.round(qs.reduce((s, q) => s + (q.level || 0), 0) / total / (INTERVALS.length - 1) * 100) : 0;
+  const due = qs.filter(q => q.dueAt <= Date.now()).length;
+  const todo = qs.filter(isTodo).length;
+  const done = qs.filter(q => (q.level || 0) >= 5).length;
+
+  $('#statGrid').innerHTML = [
+    ['总题数', total], ['平均掌握度', avg + '%'], ['今日待复习', due], ['待攻克', todo], ['已消灭', done],
+  ].map(([k, v]) => `<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+
+  const causes = ['知识缺口', '计算执行', '审题偏差', '思维路径', '习惯问题'];
+  const maxC = Math.max(1, ...causes.map(c => qs.filter(q => q.cause === c).length));
+  $('#causeChart').innerHTML = causes.map(c => {
+    const n = qs.filter(q => q.cause === c).length;
+    return `<div class="chartRow"><span class="cl">${c}</span><div class="cbar"><i style="width:${n / maxC * 100}%"></i></div><span class="cn">${n}</span></div>`;
+  }).join('');
+
+  const map = new Map();
+  qs.forEach(q => {
+    const k = q.knowledge || '未标注';
+    const cur = map.get(k) || { n: 0, sum: 0 };
+    cur.n++; cur.sum += (q.level || 0);
+    map.set(k, cur);
+  });
+  const arr = [...map.entries()]
+    .map(([k, v]) => ({ k, n: v.n, m: v.sum / v.n / (INTERVALS.length - 1) * 100 }))
+    .sort((a, b) => a.m - b.m)
+    .slice(0, 10);
+
+  $('#knowledgeChart').innerHTML = arr.length
+    ? arr.map(x => `<div class="chartRow"><span class="cl">${esc(x.k)}</span><div class="cbar warn"><i style="width:${x.m}%"></i></div><span class="cn">${Math.round(x.m)}%</span></div>`).join('')
+    : '<div class="empty">暂无数据</div>';
+}
+
+/* ================= 组卷 ================= */
+function renderPaperList(){
+  const scope = $('#paperScope').value;
+  let list = state.questions.slice();
+  if (scope === 'todo') list = list.filter(isTodo);
+  if (scope === 'due') list = list.filter(q => q.dueAt <= Date.now());
+  list.sort((a, b) => (a.knowledge || '').localeCompare(b.knowledge || ''));
+
+  const box = $('#paperList');
+  box.innerHTML = '';
+  if (!list.length) { box.innerHTML = '<div class="empty">没有可组卷的题</div>'; return; }
+
+  list.forEach(q => {
+    const row = document.createElement('label');
+    row.className = 'paperRow';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = true;
+    cb.value = q.id;
+    row.appendChild(cb);
+    row.appendChild(cropEl(q));
+    const t = document.createElement('span');
+    t.textContent = `${q.knowledge} · ${q.cause} · 掌握度 ${mastery(q)}%`;
+    row.appendChild(t);
+    box.appendChild(row);
+  });
+}
+
+function buildPaper(){
+  const ids = [...$('#paperList').querySelectorAll('input:checked')].map(i => i.value);
+  const qs = ids.map(id => state.questions.find(q => q.id === id)).filter(Boolean);
+  if (!qs.length) { toast('请至少勾选一道题'); return; }
+
+  const mode = $('#paperMode').value;
+  const area = $('#printArea');
+  area.innerHTML = '';
+
+  const title = document.createElement('h1');
+  title.className = 'printTitle';
+  title.textContent = ({ blank: '错题练习（空白卷）', self: '错题自测卷', answer: '错题解析卷' }[mode]) +
+    ' · ' + new Date().toLocaleDateString();
+  area.appendChild(title);
+
+  qs.forEach((q, i) => {
+    const item = document.createElement('div');
+    item.className = 'printItem';
+
+    const head = document.createElement('div');
+    head.className = 'printHead';
+    head.textContent = `${i + 1}. ${q.knowledge || ''}${mode === 'answer' ? '（' + q.cause + '）' : ''}`;
+    item.appendChild(head);
+    item.appendChild(cropEl(q));
+
+    if (mode === 'blank') {
+      const space = document.createElement('div');
+      space.className = 'printSpace';
+      item.appendChild(space);
+    } else {
+      const ans = document.createElement('div');
+      ans.className = 'printAnswer';
+      ans.textContent = q.note || '（未填写答案 / 解析）';
+      item.appendChild(ans);
+    }
+    area.appendChild(item);
+  });
+
+  window.print();
+}
+
+/* ================= 设置 / 数据 ================= */
+const SETTINGS_KEY = 'cuoti-mvp-settings';
+/* 默认直连 DeepSeek 官方 API，视觉模型 deepseek-flash */
+const settings = {
+  aiEnabled: false,
+  aiBase: 'https://api.deepseek.com',
+  aiKey: '',
+  aiModel: 'deepseek-flash',
+  aiPath: '/chat/completions',
+};
+
+function loadSettings(){
+  try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) {}
+  $('#aiEnabled').checked = settings.aiEnabled;
+  $('#aiBase').value = settings.aiBase;
+  $('#aiKey').value = settings.aiKey;
+  $('#aiModel').value = settings.aiModel;
+  $('#aiPath').value = settings.aiPath || '/chat/completions';
+  $('#aiDetectBtn').hidden = !settings.aiEnabled;
+  $('#aiSuggestBtn').hidden = !settings.aiEnabled;
+}
+
+function saveSettings(){
+  settings.aiEnabled = $('#aiEnabled').checked;
+  settings.aiBase = $('#aiBase').value.trim() || 'https://api.deepseek.com';
+  settings.aiKey = $('#aiKey').value.trim();
+  settings.aiModel = $('#aiModel').value.trim() || 'deepseek-flash';
+  settings.aiPath = $('#aiPath').value.trim() || '/chat/completions';
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  $('#aiDetectBtn').hidden = !settings.aiEnabled;
+  $('#aiSuggestBtn').hidden = !settings.aiEnabled;
+  toast('设置已保存');
+}
+
+async function exportData(){
+  const imgs = await idbAll('images');
+  const data = { version: 1, exportedAt: Date.now(), images: [], questions: state.questions };
+  for (const im of imgs) {
+    data.images.push({ id: im.id, name: im.name, w: im.w, h: im.h, createdAt: im.createdAt, data: await blobToDataURL(im.blob) });
+  }
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `cuoti-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+
+async function importData(file){
+  const text = await file.text();
+  const data = JSON.parse(text);
+  if (!Array.isArray(data.images) || !Array.isArray(data.questions)) throw new Error('文件格式不正确');
+  for (const im of data.images) {
+    await idbPut('images', { id: im.id, blob: dataURLToBlob(im.data), name: im.name, w: im.w, h: im.h, createdAt: im.createdAt });
+  }
+  for (const q of data.questions) await idbPut('questions', q);
+  await loadAll();
+  renderCapture(); renderBank(); renderReviewHome(); renderStats(); renderPaperList();
+  toast('导入完成');
+}
+
+async function clearAll(){
+  if (!confirm('确定清空所有图片和题目？不可恢复。')) return;
+  await idbClear('images');
+  await idbClear('questions');
+  urlCache.forEach(u => URL.revokeObjectURL(u));
+  urlCache.clear();
+  state.images = [];
+  state.questions = [];
+  state.capture = { currentImageId: null, pendingBox: null, aiQueue: [] };
+  renderCapture(); renderBank(); renderReviewHome(); renderStats(); renderPaperList();
+  toast('已清空');
+}
+
+/* ================= DeepSeek 调用 ================= */
+async function callDeepSeek(messages, { json = false, maxTokens = 1200 } = {}){
+  if (!settings.aiEnabled) throw new Error('请先在「设置」里启用 AI');
+  if (!settings.aiKey) throw new Error('请先在「设置」里填写 DeepSeek API Key');
+  const base = settings.aiBase.replace(/\/+$/, '');
+  const path = settings.aiPath.startsWith('/') ? settings.aiPath : '/' + settings.aiPath;
+  const body = {
+    model: settings.aiModel || 'deepseek-flash',
+    messages,
+    temperature: 0.1,
+    max_tokens: maxTokens,
+    stream: false,
+  };
+  if (json) body.response_format = { type: 'json_object' };
+
+  const res = await fetch(base + path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + settings.aiKey,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json())?.error?.message || ''; } catch (e) {}
+    throw new Error(`DeepSeek 请求失败 ${res.status}${detail ? '：' + detail : ''}`);
+  }
+  const data = await res.json();
+  const content = data.choices?.[0]?.message?.content || '';
+  if (!content) throw new Error('DeepSeek 返回内容为空');
+  return content;
+}
+
+/* 测试连接：发一条最小的文本请求 */
+async function testDeepSeek(){
+  try {
+    saveSettings();
+    toast('测试中…');
+    const content = await callDeepSeek([
+      { role: 'system', content: '你是连通性测试助手，只输出 JSON。' },
+      { role: 'user', content: '请只返回 {"ok":true,"model":"<你的模型名>"}，不要任何多余文字。' },
+    ], { json: true, maxTokens: 60 });
+    const obj = parseJSONSafe(content);
+    toast(`连接成功：${obj.model || settings.aiModel}`);
+  } catch (e) {
+    toast(e.message || '连接失败');
+  }
+}
+
+/* 录题页：AI 自动框选（DeepSeek 视觉） */
+async function aiDetect(){
+  const imgId = state.capture.currentImageId;
+  if (!imgId) { toast('请先选择一张图片'); return; }
+  try {
+    toast('DeepSeek 识别题目中…');
+    const img = state.images.find(i => i.id === imgId);
+    const blob = await (await fetch(imgURL(imgId))).blob();
+    const dataUrl = await blobToDataURL(blob);
+
+    const content = await callDeepSeek([
+      {
+        role: 'system',
+        content: [
+          '你是试卷题目检测器。',
+          '任务：检测图片中每一道完整题目（题干+选项/小问）的外接矩形。',
+          '严格只输出一个 JSON 对象，不要 markdown 代码块，不要解释文字。',
+          'JSON 结构：{"boxes":[{"x":0.08,"y":0.12,"w":0.84,"h":0.10}]}',
+          '坐标使用相对整张图的归一化值，范围 0~1，x/y 为左上角，w/h 为宽高。',
+          '按从上到下的顺序返回；忽略页眉、页脚、页码、大段空白。',
+          '如果确实没有题目，返回 {"boxes":[]}。',
+        ].join('\n'),
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: `请检测这张试卷图片中的题目，图片原始尺寸约 ${img.w}×${img.h}。` },
+          { type: 'image_url', image_url: { url: dataUrl } },
+        ],
+      },
+    ], { json: true, maxTokens: 1500 });
+
+    const parsed = parseJSONSafe(content);
+    const boxes = Array.isArray(parsed.boxes) ? parsed.boxes : [];
+    if (!boxes.length) throw new Error('未识别到题目');
+
+    state.capture.aiQueue = boxes
+      .map(b => ({
+        x: clamp(Number(b.x) || 0, 0, 1),
+        y: clamp(Number(b.y) || 0, 0, 1),
+        w: clamp(Number(b.w) || 0, 0, 1),
+        h: clamp(Number(b.h) || 0, 0, 1),
+      }))
+      .filter(b => b.w > 0.02 && b.h > 0.02)
+      .sort((a, b) => a.y - b.y);
+
+    if (!state.capture.aiQueue.length) throw new Error('识别结果无效');
+    state.capture.pendingBox = state.capture.aiQueue.shift();
+    showBoxForm();
+    toast(`识别到 ${boxes.length} 道题，请逐题确认`);
+  } catch (e) {
+    toast(e.message || 'AI 识别失败');
+  }
+}
+
+/* 录题表单：AI 建议知识点 + 错因（基于裁剪图，DeepSeek 视觉） */
+async function aiSuggestMeta(){
+  const b = state.capture.pendingBox;
+  const imgId = state.capture.currentImageId;
+  if (!b || !imgId) { toast('请先框选一道题'); return; }
+  try {
+    toast('DeepSeek 分析题目中…');
+    const tmpQ = { imageId: imgId, box: b };
+    const dataUrl = await cropToDataURL(tmpQ, 1000);
+
+    const content = await callDeepSeek([
+      {
+        role: 'system',
+        content: [
+          '你是中小学错题分析助手。',
+          '请根据题目图片，给出最贴切的知识点、错因和建议备注。',
+          '严格只输出一个 JSON 对象，不要 markdown 代码块，不要解释文字。',
+          'JSON 结构：{"subject":"数学","unit":"行程问题","knowledge":"相遇问题","cause":"审题偏差","note":"..."}',
+          'cause 只能是以下五者之一：知识缺口、计算执行、审题偏差、思维路径、习惯问题。',
+          'knowledge 要尽量具体（如相遇问题/追及问题/平均速度/流水行船/环形跑道/火车过桥），不要只写“行程问题”。',
+          'note 控制在 60 字以内，写清楚这道题的关键易错点或解题切入点。',
+        ].join('\n'),
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: '请分析这道题，按系统要求返回 JSON。' },
+          { type: 'image_url', image_url: { url: dataUrl } },
+        ],
+      },
+    ], { json: true, maxTokens: 500 });
+
+    const obj = parseJSONSafe(content);
+    if (obj.subject) $('#fSubject').value = obj.subject;
+    if (obj.unit) $('#fUnit').value = obj.unit;
+    if (obj.knowledge) $('#fKnowledge').value = obj.knowledge;
+    if (obj.cause && ['知识缺口','计算执行','审题偏差','思维路径','习惯问题'].includes(obj.cause)) {
+      $('#fCause').value = obj.cause;
+    }
+    if (obj.note) $('#fNote').value = obj.note;
+    toast('已填入 AI 建议，可手动修改');
+  } catch (e) {
+    toast(e.message || 'AI 分析失败');
+  }
+}
+
+/*
+ * 预留：AI 判分
+ * 用法：把题目裁剪图 + 孩子答案文本传给 DeepSeek，返回 {correct, reason}
+ * 注意：手写步骤/几何图的自动判分可靠性有限，建议始终保留“家长确认”这一步
+ */
+async function aiJudge(q, studentAnswer){
+  const dataUrl = await cropToDataURL(q, 1200);
+  const content = await callDeepSeek([
+    {
+      role: 'system',
+      content: [
+        '你是耐心的数学老师。',
+        '根据题目图片和学生答案，判断学生是否做对，并指出错在哪一步。',
+        '严格只输出一个 JSON 对象，不要 markdown 代码块：',
+        '{"correct":true,"reason":"..."}',
+        'reason 用中文，控制在 80 字以内。',
+      ].join('\n'),
+    },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: '学生答案：' + (studentAnswer || '（未提供）') },
+        { type: 'image_url', image_url: { url: dataUrl } },
+      ],
+    },
+  ], { json: true, maxTokens: 400 });
+  return parseJSONSafe(content);
+}
+
+/* ================= 事件绑定 ================= */
+function bindEvents(){
+  $$('#tabs button').forEach(b => b.onclick = () => switchView(b.dataset.view));
+
+  $('#fileInput').addEventListener('change', async e => {
+    if (e.target.files?.length) await handleFiles([...e.target.files]);
+    e.target.value = '';
+  });
+
+  $('#saveBoxBtn').onclick = saveBox;
+  $('#cancelBoxBtn').onclick = () => {
+    state.capture.pendingBox = null;
+    state.capture.aiQueue = [];
+    $('#boxFormCard').hidden = true;
+    renderBoxes();
+  };
+  $('#aiSuggestBtn').onclick = aiSuggestMeta;
+
+  $('#bankCause').onchange = renderBank;
+  $('#bankKw').oninput = renderBank;
+
+  $('#startReviewBtn').onclick = startReview;
+  $('#reviewCard').querySelectorAll('.grade').forEach(btn => {
+    btn.onclick = () => grade(btn.dataset.grade);
+  });
+
+  $('#paperScope').onchange = renderPaperList;
+  $('#buildPaperBtn').onclick = buildPaper;
+
+  $('#saveSettingsBtn').onclick = saveSettings;
+  $('#testAIBtn').onclick = testDeepSeek;
+  $('#exportBtn').onclick = exportData;
+  $('#importInput').addEventListener('change', async e => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try { await importData(f); } catch (err) { toast('导入失败：' + err.message); }
+    e.target.value = '';
+  });
+  $('#clearBtn').onclick = clearAll;
+  $('#aiDetectBtn').onclick = aiDetect;
+}
+
+/* ================= 启动 ================= */
+async function init(){
+  await openDB();
+  await loadAll();
+  loadSettings();
+  setupStage();
+  bindEvents();
+  renderCapture();
+  renderBank();
+  renderReviewHome();
+  renderStats();
+  renderPaperList();
+  $('#topStatus').textContent = `本地存储 · ${state.questions.length} 道题 · DeepSeek 可选`;
+}
+
+init().catch(err => {
+  console.error(err);
+  document.body.insertAdjacentHTML('beforeend', '<div style="padding:20px;color:#b00">初始化失败：' + esc(err.message) + '</div>');
+});
+</script>
+</body>
+</html>
