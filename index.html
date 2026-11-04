@@ -82,6 +82,15 @@ body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFan
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .aiBadge{font-size:11px;background:#e6f7ee;color:#16a34a;padding:2px 6px;border-radius:6px;margin-left:6px}
 .smallBtn{padding:5px 10px;font-size:12px;border-radius:8px}
+.stageTools{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap;font-size:13px}
+.eraseCanvas{position:absolute;inset:0;touch-action:none;cursor:crosshair;display:none;z-index:5}
+.stage.erasing .eraseCanvas{display:block}
+.stage.erasing .boxLayer{display:none}
+.brush{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+.aiJudgeBox{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px;font-size:13px}
+.aiJudgeBox textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:inherit;font-size:14px;color:var(--text);margin:6px 0;box-sizing:border-box}
+.aiJudgeResult{margin-top:6px;padding:8px 10px;border-radius:8px;background:var(--brand2)}
+.aiJudgeResult.bad{background:#fdecec}
 #printArea{display:none}
 @media print{
   #app{display:none!important}
@@ -132,8 +141,18 @@ body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFan
         <div class="stage" id="stage">
           <img id="stageImg" alt="">
           <div class="boxLayer" id="boxLayer"></div>
+          <canvas id="eraseCanvas" class="eraseCanvas"></canvas>
         </div>
-        <div class="hint">在图片上拖动，框出一道题；松手后填写信息并收录。绿框是已收录的题。</div>
+        <div class="stageTools">
+          <button class="btn tiny" id="eraseModeBtn">擦除手写笔迹</button>
+          <span id="eraseTools" hidden>
+            <button class="btn tiny primary" id="eraseApplyBtn">应用擦除</button>
+            <button class="btn tiny" id="eraseUndoBtn">撤销</button>
+            <button class="btn tiny" id="eraseCancelBtn">退出擦除</button>
+            <label class="brush">笔粗<input type="range" id="brushSize" min="8" max="60" value="24"></label>
+          </span>
+        </div>
+        <div class="hint">在图片上拖动，框出一道题；松手后填写信息并收录。绿框是已收录的题。有手写痕迹可点「擦除手写笔迹」涂白。</div>
         <div class="boxList" id="boxList"></div>
       </div>
 
@@ -201,6 +220,15 @@ body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFan
           <summary style="cursor:pointer;font-size:13px;color:var(--muted)">看备注 / 答案</summary>
           <div id="reviewNoteText" style="font-size:13px;margin-top:6px"></div>
         </details>
+        <div class="aiJudgeBox" id="aiJudgeBox" hidden>
+          <div style="font-weight:600">AI 判分 <span class="aiBadge">家长确认</span></div>
+          <textarea id="aiJudgeAnswer" rows="2" placeholder="输入孩子的答案 / 列式，如：x=3"></textarea>
+          <div class="row">
+            <button class="btn tiny primary" id="aiJudgeBtn">AI 初判</button>
+          </div>
+          <div id="aiJudgeResult" class="aiJudgeResult" hidden></div>
+          <div class="hint">AI 只做初判，请核对后再用下方四档按钮计入复习记录。</div>
+        </div>
         <div class="gradeGrid">
           <button class="grade easy" data-grade="easy">想起来了<small>下次更久</small></button>
           <button class="grade hard" data-grade="hard">有点犹豫<small>保持间隔</small></button>
@@ -215,6 +243,11 @@ body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFan
       <div class="statGrid" id="statGrid"></div>
       <div class="card"><h3>错因分布</h3><div id="causeChart"></div></div>
       <div class="card"><h3>薄弱知识点（掌握度从低到高）</h3><div id="knowledgeChart"></div></div>
+      <div class="card">
+        <h3>家长周报</h3>
+        <div class="row"><button class="btn primary" id="weeklyBtn">生成本周周报并打印</button></div>
+        <div class="hint">汇总最近 7 天的新增错题、复习与消灭情况、薄弱知识点，走浏览器打印或另存 PDF 发给家人。</div>
+      </div>
     </section>
 
     <!-- 组卷 -->
@@ -231,9 +264,15 @@ body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFan
             <option value="self">自测卷</option>
             <option value="answer">解析卷</option>
           </select>
+          <select id="paperKp" class="btn ghost"><option value="">全部知识点</option></select>
+          <select id="paperSort" class="btn ghost">
+            <option value="weak">薄弱优先（掌握度低在前）</option>
+            <option value="knowledge">按知识点分组</option>
+            <option value="new">最新收录在前</option>
+          </select>
           <button class="btn primary" id="buildPaperBtn">生成并打印</button>
         </div>
-        <div class="hint">勾选要练的题，生成后走浏览器打印，可另存为 PDF。</div>
+        <div class="hint">勾选要练的题，可按知识点筛选、按掌握度排序，生成后走浏览器打印，可另存为 PDF。</div>
       </div>
       <div class="card"><div id="paperList" class="list"></div></div>
     </section>
@@ -289,14 +328,31 @@ function toast(msg){
   toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
 }
 
-function readImageSize(file){
+function readImageInfo(file){
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(url); };
+    img.onload = () => {
+      const scale = Math.min(1, 240 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve({ w: img.naturalWidth, h: img.naturalHeight, thumb: c.toDataURL('image/jpeg', 0.7) });
+      URL.revokeObjectURL(url);
+    };
     img.onerror = () => { reject(new Error('图片读取失败')); URL.revokeObjectURL(url); };
     img.src = url;
   });
+}
+/* 从已有 canvas 生成缩略图 dataURL */
+function thumbFromCanvas(c, max = 240){
+  const scale = Math.min(1, max / Math.max(c.width, c.height));
+  const t = document.createElement('canvas');
+  t.width = Math.max(1, Math.round(c.width * scale));
+  t.height = Math.max(1, Math.round(c.height * scale));
+  t.getContext('2d').drawImage(c, 0, 0, t.width, t.height);
+  return t.toDataURL('image/jpeg', 0.7);
 }
 function blobToDataURL(b){
   return new Promise((res, rej) => {
@@ -356,6 +412,28 @@ function idbAll(store){
     r.onerror = () => rej(r.error);
   });
 }
+function idbGet(store, key){
+  return new Promise((res, rej) => {
+    const r = db.transaction(store).objectStore(store).get(key);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+/* 只读取图片元数据（含小缩略图），不把全量 blob 载入内存 */
+function idbImageMeta(){
+  return new Promise((res, rej) => {
+    const out = [];
+    const r = db.transaction('images').objectStore('images').openCursor();
+    r.onsuccess = () => {
+      const c = r.result;
+      if (!c) { res(out); return; }
+      const v = c.value;
+      out.push({ id: v.id, name: v.name, w: v.w, h: v.h, createdAt: v.createdAt, thumb: v.thumb || null });
+      c.continue();
+    };
+    r.onerror = () => rej(r.error);
+  });
+}
 function idbPut(store, val){
   return new Promise((res, rej) => {
     const r = db.transaction(store, 'readwrite').objectStore(store).put(val);
@@ -386,14 +464,18 @@ const state = {
   review: { queue: [], idx: 0 },
 };
 const urlCache = new Map();
-function imgURL(id){ return urlCache.get(id) || ''; }
+/* 按需加载：用到哪张图才从 IndexedDB 取 blob 并生成 ObjectURL */
+async function ensureURL(id){
+  if (urlCache.has(id)) return urlCache.get(id);
+  const rec = await idbGet('images', id);
+  if (!rec) return '';
+  const url = URL.createObjectURL(rec.blob);
+  urlCache.set(id, url);
+  return url;
+}
 
 async function loadAll(){
-  const imgs = await idbAll('images');
-  for (const im of imgs) {
-    if (!urlCache.has(im.id)) urlCache.set(im.id, URL.createObjectURL(im.blob));
-  }
-  state.images = imgs.map(({ blob, ...rest }) => rest);
+  state.images = await idbImageMeta();
   state.questions = await idbAll('questions');
 }
 
@@ -410,7 +492,8 @@ function cropEl(q){
   }
   div.style.aspectRatio = String((box.w * img.w) / (box.h * img.h));
   const im = document.createElement('img');
-  im.src = imgURL(img.id);
+  if (img.thumb) im.src = img.thumb;
+  else ensureURL(img.id).then(u => { if (u) im.src = u; });
   im.style.width = (100 / box.w) + '%';
   im.style.left = (-box.x / box.w * 100) + '%';
   im.style.top = (-box.y / box.h * 100) + '%';
@@ -422,7 +505,9 @@ function cropEl(q){
 async function cropToDataURL(q, maxWidth = 1200){
   const img = state.images.find(i => i.id === q.imageId);
   if (!img) throw new Error('图片缺失');
-  const blob = await (await fetch(imgURL(img.id))).blob();
+  const url = await ensureURL(img.id);
+  if (!url) throw new Error('图片缺失');
+  const blob = await (await fetch(url)).blob();
   const dataUrl = await blobToDataURL(blob);
   const image = await new Promise((res, rej) => {
     const im = new Image();
@@ -477,11 +562,10 @@ function switchView(name){
 async function handleFiles(files){
   for (const f of files) {
     try {
-      const { w, h } = await readImageSize(f);
-      const rec = { id: uid(), blob: f, w, h, name: f.name, createdAt: Date.now() };
+      const { w, h, thumb } = await readImageInfo(f);
+      const rec = { id: uid(), blob: f, w, h, name: f.name, createdAt: Date.now(), thumb };
       await idbPut('images', rec);
-      urlCache.set(rec.id, URL.createObjectURL(f));
-      state.images.push({ id: rec.id, name: rec.name, w: rec.w, h: rec.h, createdAt: rec.createdAt });
+      state.images.push({ id: rec.id, name: rec.name, w, h, createdAt: rec.createdAt, thumb });
       if (!state.capture.currentImageId) state.capture.currentImageId = rec.id;
     } catch (e) {
       toast('图片读取失败：' + f.name);
@@ -498,11 +582,13 @@ function renderCapture(){
     const d = document.createElement('div');
     d.className = 'thumb' + (im.id === cur ? ' active' : '');
     const i = document.createElement('img');
-    i.src = imgURL(im.id);
+    if (im.thumb) i.src = im.thumb;
+    else ensureURL(im.id).then(u => { if (u) i.src = u; });
     d.appendChild(i);
     d.onclick = () => {
       if (im.id === cur) return;
       if (state.capture.aiQueue.length && !confirm('还有 AI 识别的题目未确认，切换图片将放弃剩余框选，确定切换？')) return;
+      setEraseMode(false);
       state.capture.currentImageId = im.id;
       state.capture.pendingBox = null;
       state.capture.aiQueue = [];
@@ -515,7 +601,9 @@ function renderCapture(){
   const stageCard = $('#stageCard');
   if (!cur) { stageCard.hidden = true; $('#boxFormCard').hidden = true; return; }
   stageCard.hidden = false;
-  $('#stageImg').src = imgURL(cur);
+  ensureURL(cur).then(u => {
+    if (u && state.capture.currentImageId === cur) $('#stageImg').src = u;
+  });
   renderBoxes();
 }
 
@@ -587,6 +675,118 @@ function setupStage(){
   boxLayer.addEventListener('pointercancel', () => {
     if (drag) { drag.el.remove(); drag = null; }
   });
+}
+
+/* ================= 录题：擦除手写笔迹 ================= */
+const eraser = { active: false, strokes: [], cur: null };
+const eraseCanvas = $('#eraseCanvas');
+
+function syncEraseCanvas(){
+  const stage = $('#stage');
+  if (!stage.clientWidth) return;
+  eraseCanvas.width = stage.clientWidth;
+  eraseCanvas.height = stage.clientHeight;
+  redrawErase();
+}
+
+function redrawErase(){
+  const ctx = eraseCanvas.getContext('2d');
+  ctx.clearRect(0, 0, eraseCanvas.width, eraseCanvas.height);
+  ctx.strokeStyle = '#fff';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const draw = s => {
+    ctx.lineWidth = s.size;
+    ctx.beginPath();
+    s.pts.forEach((p, i) => {
+      const x = p.x * eraseCanvas.width, y = p.y * eraseCanvas.height;
+      if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    });
+    ctx.stroke();
+  };
+  eraser.strokes.forEach(draw);
+  if (eraser.cur) draw(eraser.cur);
+}
+
+function setEraseMode(on){
+  if (on && state.capture.pendingBox) { toast('请先收录或取消当前这道题'); return; }
+  eraser.active = on;
+  $('#stage').classList.toggle('erasing', on);
+  $('#eraseTools').hidden = !on;
+  $('#eraseModeBtn').hidden = on;
+  if (on) syncEraseCanvas();
+  else { eraser.strokes = []; eraser.cur = null; }
+}
+
+async function applyErase(){
+  const imgId = state.capture.currentImageId;
+  const meta = state.images.find(i => i.id === imgId);
+  if (!imgId || !meta) return;
+  if (!eraser.strokes.length) { toast('还没有涂抹任何区域'); return; }
+  const rec = await idbGet('images', imgId);
+  if (!rec) return;
+  const url = URL.createObjectURL(rec.blob);
+  let im;
+  try {
+    im = await new Promise((res, rej) => {
+      const i2 = new Image();
+      i2.onload = () => res(i2);
+      i2.onerror = () => rej(new Error('图片解码失败'));
+      i2.src = url;
+    });
+  } catch (e) {
+    URL.revokeObjectURL(url);
+    toast(e.message || '擦除失败');
+    return;
+  }
+  URL.revokeObjectURL(url);
+
+  /* 白色笔迹按原图尺寸合成，图片宽高不变，已收录题目的框选位置不受影响 */
+  const c = document.createElement('canvas');
+  c.width = meta.w; c.height = meta.h;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(im, 0, 0);
+  ctx.strokeStyle = '#fff';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const k = meta.w / (eraseCanvas.clientWidth || meta.w);
+  eraser.strokes.forEach(s => {
+    ctx.lineWidth = Math.max(1, s.size * k);
+    ctx.beginPath();
+    s.pts.forEach((p, i) => {
+      const x = p.x * meta.w, y = p.y * meta.h;
+      if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    });
+    ctx.stroke();
+  });
+
+  const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.92));
+  await idbPut('images', { ...rec, blob, thumb: thumbFromCanvas(c) });
+  const old = urlCache.get(imgId);
+  if (old) { URL.revokeObjectURL(old); urlCache.delete(imgId); }
+  setEraseMode(false);
+  renderCapture();
+  toast('擦除已应用');
+}
+
+function setupEraser(){
+  eraseCanvas.addEventListener('pointerdown', e => {
+    const r = eraseCanvas.getBoundingClientRect();
+    eraser.cur = { size: +$('#brushSize').value, pts: [{ x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }] };
+    eraseCanvas.setPointerCapture(e.pointerId);
+    redrawErase();
+  });
+  eraseCanvas.addEventListener('pointermove', e => {
+    if (!eraser.cur) return;
+    const r = eraseCanvas.getBoundingClientRect();
+    eraser.cur.pts.push({ x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height });
+    redrawErase();
+  });
+  const end = () => {
+    if (eraser.cur) { eraser.strokes.push(eraser.cur); eraser.cur = null; }
+  };
+  eraseCanvas.addEventListener('pointerup', end);
+  eraseCanvas.addEventListener('pointercancel', end);
 }
 
 function showBoxForm(){
@@ -717,6 +917,9 @@ function renderReviewCard(){
   holder.appendChild(cropEl(q));
   $('#reviewNoteText').textContent = q.note || '（无备注）';
   $('#reviewNote').open = false;
+  $('#aiJudgeBox').hidden = !settings.aiEnabled;
+  $('#aiJudgeAnswer').value = '';
+  $('#aiJudgeResult').hidden = true;
 }
 
 async function grade(g){
@@ -766,12 +969,26 @@ function renderStats(){
 }
 
 /* ================= 组卷 ================= */
+function fillPaperKp(){
+  const sel = $('#paperKp');
+  const cur = sel.value;
+  const kps = [...new Set(state.questions.map(q => q.knowledge || '未标注'))].sort((a, b) => a.localeCompare(b, 'zh'));
+  sel.innerHTML = '<option value="">全部知识点</option>' +
+    kps.map(k => `<option value="${esc(k)}"${k === cur ? ' selected' : ''}>${esc(k)}</option>`).join('');
+}
+
 function renderPaperList(){
+  fillPaperKp();
   const scope = $('#paperScope').value;
+  const kp = $('#paperKp').value;
+  const sort = $('#paperSort').value;
   let list = state.questions.slice();
   if (scope === 'todo') list = list.filter(isTodo);
   if (scope === 'due') list = list.filter(q => q.dueAt <= Date.now());
-  list.sort((a, b) => (a.knowledge || '').localeCompare(b.knowledge || ''));
+  if (kp) list = list.filter(q => (q.knowledge || '未标注') === kp);
+  if (sort === 'weak') list.sort((a, b) => (a.level || 0) - (b.level || 0) || b.createdAt - a.createdAt);
+  else if (sort === 'new') list.sort((a, b) => b.createdAt - a.createdAt);
+  else list.sort((a, b) => (a.knowledge || '').localeCompare(b.knowledge || '', 'zh') || (a.level || 0) - (b.level || 0));
 
   const box = $('#paperList');
   box.innerHTML = '';
@@ -847,6 +1064,75 @@ function buildPaper(){
   window.print();
 }
 
+/* ================= 家长周报 ================= */
+function repSection(area, head, lines){
+  if (!lines.length) return;
+  const item = document.createElement('div');
+  item.className = 'printItem';
+  const h = document.createElement('div');
+  h.className = 'printHead';
+  h.textContent = head;
+  item.appendChild(h);
+  lines.forEach(t => {
+    const d = document.createElement('div');
+    d.className = 'printAnswer';
+    d.style.marginTop = '4px';
+    d.textContent = t;
+    item.appendChild(d);
+  });
+  area.appendChild(item);
+}
+
+function buildWeekly(){
+  if (!state.questions.length) { toast('还没有错题数据'); return; }
+  const now = Date.now();
+  const weekAgo = now - 7 * DAY;
+  const fmt = t => new Date(t).toLocaleDateString('zh-CN');
+  const qs = state.questions;
+  const added = qs.filter(q => (q.createdAt || 0) >= weekAgo);
+  const reviewed = qs.filter(q => (q.lastReviewedAt || 0) >= weekAgo);
+  const eliminated = reviewed.filter(q => (q.level || 0) >= 5);
+  const due = qs.filter(q => q.dueAt <= now).length;
+
+  const area = $('#printArea');
+  area.innerHTML = '';
+  const title = document.createElement('h1');
+  title.className = 'printTitle';
+  title.textContent = `家长周报 · ${fmt(weekAgo)} ~ ${fmt(now)}`;
+  area.appendChild(title);
+
+  repSection(area, '本周概览', [
+    `新增错题 ${added.length} 道`,
+    `复习 ${reviewed.length} 道题`,
+    `消灭（掌握度达标）${eliminated.length} 道`,
+    `目前还有 ${due} 道题待复习`,
+  ]);
+
+  const causeLine = ['知识缺口', '计算执行', '审题偏差', '思维路径', '习惯问题']
+    .map(c => `${c} ${added.filter(q => q.cause === c).length} 道`)
+    .join('，');
+  repSection(area, '本周新增错题的错因分布', added.length ? [causeLine] : ['本周没有新增错题，继续保持']);
+
+  const map = new Map();
+  qs.forEach(q => {
+    const k = q.knowledge || '未标注';
+    const cur = map.get(k) || { n: 0, sum: 0 };
+    cur.n++; cur.sum += (q.level || 0);
+    map.set(k, cur);
+  });
+  const weak = [...map.entries()]
+    .map(([k, v]) => ({ k, n: v.n, m: Math.round(v.sum / v.n / (INTERVALS.length - 1) * 100) }))
+    .sort((a, b) => a.m - b.m)
+    .slice(0, 5);
+  repSection(area, '需要重点关注的知识点', weak.map(x => `${x.k}：平均掌握度 ${x.m}%，共 ${x.n} 题`));
+
+  if (eliminated.length) {
+    repSection(area, '本周消灭的题', eliminated.map(q => `${q.knowledge || '未标注'}（${q.cause}）`));
+  }
+
+  window.print();
+}
+
 /* ================= 设置 / 数据 ================= */
 const SETTINGS_KEY = 'cuoti-mvp-settings';
 /* 默认直连 DeepSeek 官方 API，视觉模型 deepseek-flash */
@@ -885,7 +1171,7 @@ async function exportData(){
   const imgs = await idbAll('images');
   const data = { version: 1, exportedAt: Date.now(), images: [], questions: state.questions };
   for (const im of imgs) {
-    data.images.push({ id: im.id, name: im.name, w: im.w, h: im.h, createdAt: im.createdAt, data: await blobToDataURL(im.blob) });
+    data.images.push({ id: im.id, name: im.name, w: im.w, h: im.h, createdAt: im.createdAt, thumb: im.thumb || null, data: await blobToDataURL(im.blob) });
   }
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -902,7 +1188,9 @@ async function importData(file){
   for (const im of data.images) {
     const old = urlCache.get(im.id);
     if (old) { URL.revokeObjectURL(old); urlCache.delete(im.id); }
-    await idbPut('images', { id: im.id, blob: dataURLToBlob(im.data), name: im.name, w: im.w, h: im.h, createdAt: im.createdAt });
+    const rec = { id: im.id, blob: dataURLToBlob(im.data), name: im.name, w: im.w, h: im.h, createdAt: im.createdAt };
+    if (im.thumb) rec.thumb = im.thumb;
+    await idbPut('images', rec);
   }
   for (const q of data.questions) await idbPut('questions', q);
   await loadAll();
@@ -993,7 +1281,7 @@ async function aiDetect(){
   try {
     toast('DeepSeek 识别题目中…');
     const img = state.images.find(i => i.id === imgId);
-    const blob = await (await fetch(imgURL(imgId))).blob();
+    const blob = await (await fetch(await ensureURL(imgId))).blob();
     const dataUrl = await blobToDataURL(blob);
 
     const content = await callDeepSeek([
@@ -1117,6 +1405,28 @@ async function aiJudge(q, studentAnswer){
   return parseJSONSafe(content);
 }
 
+/* AI 判分 UI：AI 初判，家长核对后自行选择四档评价 */
+async function runAiJudge(){
+  const q = state.review.queue[state.review.idx];
+  if (!q) return;
+  const answer = $('#aiJudgeAnswer').value.trim();
+  if (!answer) { toast('请先输入孩子的答案'); return; }
+  const btn = $('#aiJudgeBtn');
+  btn.disabled = true;
+  try {
+    toast('AI 判分中…');
+    const r = await aiJudge(q, answer);
+    const box = $('#aiJudgeResult');
+    box.hidden = false;
+    box.classList.toggle('bad', !r.correct);
+    box.textContent = `AI 初判：${r.correct ? '做对了' : '做错了'}${r.reason ? ' — ' + r.reason : ''}。请核对后选择下方评价。`;
+  } catch (e) {
+    toast(e.message || 'AI 判分失败');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 /* ================= 事件绑定 ================= */
 function bindEvents(){
   $$('#tabs button').forEach(b => b.onclick = () => switchView(b.dataset.view));
@@ -1160,12 +1470,28 @@ function bindEvents(){
 
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
+    if (eraser.active) { setEraseMode(false); return; }
     if (!state.capture.pendingBox) return;
     state.capture.pendingBox = null;
     state.capture.aiQueue = [];
     $('#boxFormCard').hidden = true;
     renderBoxes();
   });
+
+  $('#eraseModeBtn').onclick = () => setEraseMode(true);
+  $('#eraseCancelBtn').onclick = () => setEraseMode(false);
+  $('#eraseUndoBtn').onclick = () => { eraser.strokes.pop(); redrawErase(); };
+  $('#eraseApplyBtn').onclick = applyErase;
+
+  $('#aiJudgeBtn').onclick = runAiJudge;
+
+  $('#paperKp').onchange = renderPaperList;
+  $('#paperSort').onchange = renderPaperList;
+
+  $('#weeklyBtn').onclick = buildWeekly;
+
+  $('#stageImg').addEventListener('load', syncEraseCanvas);
+  window.addEventListener('resize', () => { if (eraser.active) syncEraseCanvas(); });
 }
 
 /* ================= 启动 ================= */
@@ -1174,6 +1500,7 @@ async function init(){
   await loadAll();
   loadSettings();
   setupStage();
+  setupEraser();
   bindEvents();
   renderCapture();
   renderBank();
