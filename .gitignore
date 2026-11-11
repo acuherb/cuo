@@ -1,0 +1,25 @@
+# 密钥与本地私密文件（切勿提交）
+cuo-key.md
+*key*.md
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+
+# 用户导出的数据备份
+cuoti-backup-*.json
+*.json.bak
+
+# IDE / 本地工具数据
+.codebuddy/
+.idea/
+.vscode/
+*.swp
+
+# 运行时
+node_modules/
+npm-debug.log*
+*.log
+.DS_Store
+Thumbs.db

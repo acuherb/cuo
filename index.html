@@ -3,8 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>错题舱 · 单文件 MVP（DeepSeek 版）</title>
+<title>错题舱 · 本地优先的错题本</title>
+<meta name="description" content="拍照框选错题、间隔复习、诊断统计与组卷打印，数据只存在你自己的设备里。">
+<meta name="theme-color" content="#3b6ef6">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="manifest" href="./manifest.webmanifest">
 <style>
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.warnBox{font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:8px 10px;margin:10px 0}
+.kbdBox{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.kbdBox label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.kbdBox input{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:14px;width:100%}
+.judgeBox{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.judgeBox textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px;font:inherit;font-size:14px}
+.judgeResult{font-size:13px;margin-top:8px;padding:8px;border-radius:8px;background:#f3f6fc}
+.printAnswers{page-break-before:always;break-before:page;margin-top:16px}
+.printAnswers h2{font-size:16px;margin:0 0 12px}
+.printAnswerLine{font-size:13px;margin-bottom:8px}
 :root{
   --bg:#f6f7f9; --card:#fff; --line:#e3e6ea; --text:#1f2328; --muted:#6b7280;
   --brand:#3b6ef6; --brand2:#eaf0ff; --ok:#16a34a; --warn:#f59e0b; --bad:#ef4444;
@@ -84,6 +100,7 @@ body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFan
 .smallBtn{padding:5px 10px;font-size:12px;border-radius:8px}
 #printArea{display:none}
 @media print{
+  @page{margin:14mm}
   #app{display:none!important}
   #printArea{display:block!important}
   body{background:#fff;padding:0}
@@ -93,23 +110,25 @@ body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFan
   .printItem .crop{max-width:560px;border:1px solid #ddd}
   .printSpace{height:110px;border-bottom:1px dashed #ccc;margin-top:8px}
   .printAnswer{font-size:13px;background:#f7f7f7;padding:8px;border-radius:6px;margin-top:6px}
+  .printAnswerLine{page-break-inside:avoid;break-inside:avoid}
 }
 </style>
 </head>
 <body>
 <div id="app">
+  <div id="envWarn" class="warnBox" role="status" hidden></div>
   <header class="topbar">
-    <div class="brand">错题舱 <span class="tag">MVP · DeepSeek</span></div>
-    <div class="sub" id="topStatus">本地存储 · 无需联网</div>
+    <div class="brand">错题舱 <span class="tag">本地优先</span></div>
+    <div class="sub" id="topStatus">本地存储 · 正在初始化…</div>
   </header>
 
-  <nav class="tabs" id="tabs">
-    <button data-view="capture" class="active">录题</button>
-    <button data-view="bank">错题库</button>
-    <button data-view="review">复习</button>
-    <button data-view="stats">诊断</button>
-    <button data-view="paper">组卷</button>
-    <button data-view="settings">设置</button>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="功能导航">
+    <button type="button" role="tab" aria-selected="true" aria-controls="view-capture" data-view="capture" class="active">录题</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="view-bank" data-view="bank">错题库</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="view-review" data-view="review">复习</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="view-stats" data-view="stats">诊断</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="view-paper" data-view="paper">组卷</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="view-settings" data-view="settings">设置</button>
   </nav>
 
   <main>
@@ -119,20 +138,37 @@ body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFan
         <div class="row">
           <label class="btn primary">
             拍照 / 选图
-            <input type="file" id="fileInput" accept="image/*" multiple hidden>
+            <input type="file" id="fileInput" accept="image/*" multiple hidden aria-label="选择试卷照片">
           </label>
-          <button class="btn ghost" id="aiDetectBtn" hidden>AI 自动框选 <span class="aiBadge">DeepSeek</span></button>
+          <button type="button" class="btn ghost" id="aiDetectBtn" hidden>AI 自动框选 <span class="aiBadge">DeepSeek</span></button>
         </div>
-        <div class="hint">支持一次多选；图片只存在本机浏览器里，不上传任何服务器。</div>
+        <div class="hint" id="privacyHint">支持一次多选；未启用 AI 时，图片只存在本机浏览器里，不上传任何服务器。启用 AI 后，自动框选 / 建议知识点 / 判分会把对应图片发送给你所配置的 API 服务。</div>
         <div class="thumbs" id="imgThumbs"></div>
       </div>
 
       <div class="card" id="stageCard" hidden>
         <div class="stage" id="stage">
-          <img id="stageImg" alt="">
-          <div class="boxLayer" id="boxLayer"></div>
+          <img id="stageImg" alt="待框选的试卷照片">
+          <div class="boxLayer" id="boxLayer" role="application" aria-label="拖动鼠标或手指框选一道题；键盘用户可使用下方「键盘框选」"></div>
         </div>
         <div class="hint">在图片上拖动，框出一道题；松手后填写信息并收录。绿框是已收录的题。</div>
+        <div class="row" style="margin-top:8px">
+          <button type="button" class="btn ghost tiny" id="kbdBoxBtn" aria-expanded="false">键盘框选</button>
+          <button type="button" class="btn danger tiny" id="deleteImageBtn">删除这张图片</button>
+          <span class="hint" id="imageInfo" style="margin:0"></span>
+        </div>
+        <div class="card" id="kbdBoxCard" hidden style="margin:10px 0 0;padding:10px">
+          <h3>用坐标框选（键盘可用）</h3>
+          <div class="kbdBox">
+            <label>左上角 x (%)<input type="number" id="kbX" min="0" max="100" value="5"></label>
+            <label>左上角 y (%)<input type="number" id="kbY" min="0" max="100" value="5"></label>
+            <label>宽度 w (%)<input type="number" id="kbW" min="1" max="100" value="90"></label>
+            <label>高度 h (%)<input type="number" id="kbH" min="1" max="100" value="20"></label>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <button type="button" class="btn primary smallBtn" id="applyKbdBoxBtn">应用到表单</button>
+          </div>
+        </div>
         <div class="boxList" id="boxList"></div>
       </div>
 
@@ -155,9 +191,9 @@ body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFan
           <label>备注 / 答案 / 解析<textarea id="fNote" rows="2" placeholder="可写正确答案、关键步骤或易错点"></textarea></label>
         </div>
         <div class="row" style="margin-top:10px">
-          <button class="btn primary" id="saveBoxBtn">收录此题</button>
-          <button class="btn ghost" id="cancelBoxBtn">取消</button>
-          <button class="btn ghost smallBtn" id="aiSuggestBtn" hidden>AI 建议知识点/错因</button>
+          <button type="button" class="btn primary" id="saveBoxBtn">收录此题</button>
+          <button type="button" class="btn ghost" id="cancelBoxBtn">取消</button>
+          <button type="button" class="btn ghost smallBtn" id="aiSuggestBtn" hidden>AI 建议知识点/错因</button>
         </div>
       </div>
 
@@ -190,7 +226,7 @@ body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFan
         <div class="bigNum" id="dueCount">0</div>
         <div class="hint" style="text-align:center">道题今天该复习</div>
         <div class="row" style="justify-content:center;margin-top:14px">
-          <button class="btn primary" id="startReviewBtn">开始复习</button>
+          <button type="button" class="btn primary" id="startReviewBtn">开始复习</button>
         </div>
       </div>
       <div class="card" id="reviewCard" hidden>
@@ -200,11 +236,20 @@ body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFan
           <summary style="cursor:pointer;font-size:13px;color:var(--muted)">看备注 / 答案</summary>
           <div id="reviewNoteText" style="font-size:13px;margin-top:6px"></div>
         </details>
+        <div class="judgeBox" id="judgeBox" hidden>
+          <label for="judgeAnswer" style="font-size:13px;color:var(--muted)">写下你的答案，让 AI 帮你看一眼（可选）</label>
+          <textarea id="judgeAnswer" rows="2" placeholder="例如：设相遇时间为 t，60t + 40t = 200，t = 2 小时"></textarea>
+          <div class="row" style="margin-top:8px">
+            <button type="button" class="btn ghost smallBtn" id="judgeBtn">AI 判分</button>
+          </div>
+          <div class="judgeResult" id="judgeResult" role="status" aria-live="polite" hidden></div>
+          <div class="hint">AI 判分仅供参考，最终请按下面四档自评记录掌握程度。</div>
+        </div>
         <div class="gradeGrid">
-          <button class="grade easy" data-grade="easy">想起来了<small>下次更久</small></button>
-          <button class="grade hard" data-grade="hard">有点犹豫<small>保持间隔</small></button>
-          <button class="grade forgot" data-grade="forgot">完全忘了<small>明天再见</small></button>
-          <button class="grade wrong" data-grade="wrong">又错了<small>明天再见</small></button>
+          <button type="button" class="grade easy" data-grade="easy">想起来了<small>下次更久</small></button>
+          <button type="button" class="grade hard" data-grade="hard">有点犹豫<small>保持间隔</small></button>
+          <button type="button" class="grade forgot" data-grade="forgot">完全忘了<small>明天再见</small></button>
+          <button type="button" class="grade wrong" data-grade="wrong">又错了<small>明天再见</small></button>
         </div>
       </div>
     </section>
@@ -241,34 +286,46 @@ body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFan
     <section id="view-settings" class="view">
       <div class="card">
         <h3>DeepSeek AI 辅助（可选）</h3>
-        <label class="switch"><input type="checkbox" id="aiEnabled"> 启用 AI（自动框选 / 建议知识点）</label>
+        <label class="switch"><input type="checkbox" id="aiEnabled"> 启用 AI（自动框选 / 建议知识点 / 判分）</label>
         <div class="form">
-          <label>API Base<input id="aiBase" placeholder="https://api.deepseek.com"></label>
-          <label>API Key<input id="aiKey" type="password" placeholder="sk-..."></label>
+          <label>连接方式
+            <select id="aiMode">
+              <option value="proxy">本地代理（推荐，密钥留在服务端）</option>
+              <option value="direct">浏览器直连（仅本机单人使用）</option>
+            </select>
+          </label>
           <label>模型<input id="aiModel" placeholder="deepseek-flash"></label>
-          <label>API 路径<input id="aiPath" placeholder="/chat/completions"></label>
         </div>
+        <div id="directFields" hidden>
+          <div class="form" style="margin-top:10px">
+            <label>API Base<input id="aiBase" placeholder="https://api.deepseek.com"></label>
+            <label>API 路径<input id="aiPath" placeholder="/chat/completions"></label>
+            <label>API Key<input id="aiKey" type="password" placeholder="sk-..." autocomplete="off"></label>
+          </div>
+          <label class="switch" style="margin-top:10px"><input type="checkbox" id="rememberKey"> 在这台设备记住 Key（存 localStorage）</label>
+        </div>
+        <div class="warnBox" id="aiModeWarn" role="status" hidden></div>
         <div class="row" style="margin-top:10px">
-          <button class="btn primary" id="saveSettingsBtn">保存设置</button>
-          <button class="btn ghost" id="testAIBtn">测试连接</button>
+          <button type="button" class="btn primary" id="saveSettingsBtn">保存设置</button>
+          <button type="button" class="btn ghost" id="testAIBtn">测试连接</button>
         </div>
-        <div class="hint">默认已填好 DeepSeek 官方地址和 <code>deepseek-flash</code> 视觉模型。Key 只保存在本机 localStorage，只会发给你填写的 API 服务。不填也能完整使用离线功能。</div>
+        <div class="hint">不启用 AI 也能完整离线使用。代理模式需先用 <code>npm start</code> 启动本地服务，并在服务端设置 <code>DEEPSEEK_API_KEY</code>，浏览器永远拿不到密钥。启用 AI 后，相关题目图片会发送给你配置的 API 服务。</div>
       </div>
       <div class="card">
         <h3>数据</h3>
         <div class="row">
-          <button class="btn ghost" id="exportBtn">导出 JSON 备份</button>
-          <label class="btn ghost">导入 JSON<input type="file" id="importInput" accept=".json" hidden></label>
-          <button class="btn danger" id="clearBtn">清空全部</button>
+          <button type="button" class="btn ghost" id="exportBtn">导出 JSON 备份</button>
+          <label class="btn ghost">导入 JSON<input type="file" id="importInput" accept=".json" hidden aria-label="导入 JSON 备份"></label>
+          <button type="button" class="btn danger" id="clearBtn">清空全部</button>
         </div>
-        <div class="hint">换设备、换浏览器前先导出，导入后图片和题目都会恢复。</div>
+        <div class="hint">换设备、换浏览器前先导出。图片保存前会自动压缩；导入时会校验格式，同一 ID 的记录会被覆盖。</div>
       </div>
     </section>
   </main>
 </div>
 
-<div id="printArea"></div>
-<div id="toast" class="toast"></div>
+<div id="printArea" aria-hidden="true"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
 /* ================= 基础工具 ================= */
@@ -288,15 +345,6 @@ function toast(msg){
   toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
 }
 
-function readImageSize(file){
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(url); };
-    img.onerror = () => { reject(new Error('图片读取失败')); URL.revokeObjectURL(url); };
-    img.src = url;
-  });
-}
 function blobToDataURL(b){
   return new Promise((res, rej) => {
     const r = new FileReader();
@@ -327,14 +375,124 @@ function parseJSONSafe(text){
   return JSON.parse(s);
 }
 
+/* ================= 图片处理 / 数据校验 ================= */
+const IMAGE_MAX_SIDE = 2000;      /* 入库图片长边上限，避免手机原图撑爆配额 */
+const AI_IMAGE_MAX_SIDE = 1600;   /* 送给视觉模型的整图长边上限 */
+const CAUSES = ['知识缺口', '计算执行', '审题偏差', '思维路径', '习惯问题'];
+
+function loadImageFromURL(url){
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error('图片解码失败'));
+    im.src = url;
+  });
+}
+
+/* 等比缩放并重新编码为 JPEG：返回 { blob, w, h } */
+async function prepareImage(blob, maxSide = IMAGE_MAX_SIDE){
+  const src = URL.createObjectURL(blob);
+  try {
+    const im = await loadImageFromURL(src);
+    const scale = Math.min(1, maxSide / Math.max(im.naturalWidth, im.naturalHeight));
+    const w = Math.max(1, Math.round(im.naturalWidth * scale));
+    const h = Math.max(1, Math.round(im.naturalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(im, 0, 0, w, h);
+    const out = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.86));
+    if (!out) throw new Error('图片压缩失败');
+    return { blob: out, w, h };
+  } finally {
+    URL.revokeObjectURL(src);
+  }
+}
+
+/* 把已入库图片缩小后转 dataURL，避免把原图整张塞进 AI 请求体 */
+async function imageToScaledDataURL(imgId, maxSide = AI_IMAGE_MAX_SIDE){
+  const url = imgURL(imgId);
+  if (!url) throw new Error('图片缺失');
+  const blob = await (await fetch(url)).blob();
+  const { blob: small } = await prepareImage(blob, maxSide);
+  return blobToDataURL(small);
+}
+
+/* 打印前等图片解码完成，避免预览里出现空白题图（最长等待 5 秒兜底） */
+function waitForImages(root, timeout = 5000){
+  const imgs = [...root.querySelectorAll('img')];
+  const one = im => new Promise(resolve => {
+    if (im.complete) return resolve();
+    const done = () => resolve();
+    im.addEventListener('load', done, { once: true });
+    im.addEventListener('error', done, { once: true });
+  });
+  return Promise.race([
+    Promise.all(imgs.map(one)),
+    new Promise(resolve => setTimeout(resolve, timeout)),
+  ]);
+}
+
+function normalizeBox(b){
+  if (!b || typeof b !== 'object') throw new Error('缺少 box');
+  const box = {
+    x: clamp(Number(b.x) || 0, 0, 1),
+    y: clamp(Number(b.y) || 0, 0, 1),
+    w: clamp(Number(b.w) || 0, 0, 1),
+    h: clamp(Number(b.h) || 0, 0, 1),
+  };
+  if (box.w <= 0 || box.h <= 0) throw new Error('box 尺寸无效');
+  return box;
+}
+
+/* 老数据 / 手工编辑的备份可能缺字段，统一补齐，避免渲染时崩溃 */
+function normalizeQuestion(q){
+  if (!q || typeof q !== 'object' || !q.id || !q.imageId) throw new Error('题目记录缺少 id / imageId');
+  return {
+    ...q,
+    box: normalizeBox(q.box),
+    subject: q.subject || '未分类',
+    book: q.book || '',
+    unit: q.unit || '',
+    knowledge: q.knowledge || '未标注',
+    cause: CAUSES.includes(q.cause) ? q.cause : '知识缺口',
+    note: q.note || '',
+    level: clamp(Number(q.level) || 0, 0, INTERVALS.length - 1),
+    dueAt: Number(q.dueAt) || Date.now(),
+    createdAt: Number(q.createdAt) || Date.now(),
+    reviewCount: Number(q.reviewCount) || 0,
+    lapses: Number(q.lapses) || 0,
+    lastReviewedAt: q.lastReviewedAt || null,
+  };
+}
+
+function validateBackup(data){
+  if (!data || typeof data !== 'object') throw new Error('文件内容不是对象');
+  if (!Array.isArray(data.images) || !Array.isArray(data.questions)) throw new Error('缺少 images / questions 数组');
+  if (Number(data.version) > 2) throw new Error('备份版本过新，请升级错题舱后再导入');
+  const images = data.images.map(im => {
+    if (!im || typeof im.id !== 'string' || !/^data:image\/[a-z+]+;base64,/i.test(im.data || '')) {
+      throw new Error('图片记录格式不正确');
+    }
+    return {
+      id: im.id, name: im.name || '', w: Number(im.w) || 0, h: Number(im.h) || 0,
+      createdAt: Number(im.createdAt) || Date.now(), compressed: Boolean(im.compressed), data: im.data,
+    };
+  });
+  const questions = data.questions.map(normalizeQuestion);
+  return { version: Number(data.version) || 1, images, questions };
+}
+
 /* ================= IndexedDB ================= */
-const DB_NAME = 'cuoti-mvp', DB_VER = 1;
+const DB_NAME = 'cuoti-mvp', DB_VER = 2;
 let db = null;
 
 function openDB(){
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VER);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = e => {
       const d = req.result;
       if (!d.objectStoreNames.contains('images')) d.createObjectStore('images', { keyPath: 'id' });
       if (!d.objectStoreNames.contains('questions')) {
@@ -343,9 +501,20 @@ function openDB(){
         s.createIndex('knowledge', 'knowledge');
         s.createIndex('cause', 'cause');
       }
+      /* v1 → v2：补齐历史记录的新字段，后续加字段照此按 oldVersion 逐级迁移 */
+      if (e.oldVersion < 2 && d.objectStoreNames.contains('questions')) {
+        const store = req.transaction.objectStore('questions');
+        store.openCursor().onsuccess = ev => {
+          const cur = ev.target.result;
+          if (!cur) return;
+          try { cur.update(normalizeQuestion(cur.value)); } catch { /* 坏记录留给加载阶段兜底 */ }
+          cur.continue();
+        };
+      }
     };
     req.onsuccess = () => { db = req.result; resolve(db); };
-    req.onerror = () => reject(req.error);
+    req.onerror = () => reject(req.error || new Error('无法打开本地数据库'));
+    req.onblocked = () => reject(new Error('本地数据库被其它标签页占用，请关闭后重试'));
   });
 }
 function idbAll(store){
@@ -389,11 +558,27 @@ function imgURL(id){ return urlCache.get(id) || ''; }
 
 async function loadAll(){
   const imgs = await idbAll('images');
-  for (const im of imgs) {
-    if (!urlCache.has(im.id)) urlCache.set(im.id, URL.createObjectURL(im.blob));
-  }
+  /* 每次加载都重建 URL，避免导入备份时同 ID 图片仍显示旧缓存 */
+  urlCache.forEach(u => URL.revokeObjectURL(u));
+  urlCache.clear();
+  for (const im of imgs) urlCache.set(im.id, URL.createObjectURL(im.blob));
   state.images = imgs.map(({ blob, ...rest }) => rest);
-  state.questions = await idbAll('questions');
+  const raw = await idbAll('questions');
+  state.questions = raw.map(q => {
+    try { return normalizeQuestion(q); } catch { return null; }
+  }).filter(Boolean);
+}
+
+function updateTopStatus(){
+  $('#topStatus').textContent =
+    `本地存储 · ${state.questions.length} 道题 · ${state.images.length} 张图 · AI ${settings.aiEnabled ? '已启用' : '未启用'}`;
+}
+
+function friendlyStorageError(e){
+  if (e && /quota|storage/i.test(String(e.name) + ' ' + String(e.message))) {
+    return '本地存储空间不足，请先删除不用的图片，或导出备份后清理';
+  }
+  return (e && e.message) || '未知错误';
 }
 
 /* ================= 图片裁剪展示 ================= */
@@ -409,6 +594,7 @@ function cropEl(q){
   }
   div.style.aspectRatio = String((box.w * img.w) / (box.h * img.h));
   const im = document.createElement('img');
+  im.alt = '题目截图';
   im.src = imgURL(img.id);
   im.style.width = (100 / box.w) + '%';
   im.style.left = (-box.x / box.w * 100) + '%';
@@ -474,19 +660,24 @@ function switchView(name){
 
 /* ================= 录题：图片 ================= */
 async function handleFiles(files){
+  let ok = 0;
   for (const f of files) {
     try {
-      const { w, h } = await readImageSize(f);
-      const rec = { id: uid(), blob: f, w, h, name: f.name, createdAt: Date.now() };
+      const { blob, w, h } = await prepareImage(f);
+      const createdAt = Date.now();
+      const rec = { id: uid(), blob, w, h, name: f.name, createdAt, compressed: true };
       await idbPut('images', rec);
-      urlCache.set(rec.id, URL.createObjectURL(f));
-      state.images.push({ id: rec.id, name: rec.name, w: rec.w, h: rec.h, createdAt: rec.createdAt });
+      urlCache.set(rec.id, URL.createObjectURL(blob));
+      state.images.push({ id: rec.id, name: rec.name, w, h, createdAt, compressed: true });
       if (!state.capture.currentImageId) state.capture.currentImageId = rec.id;
+      ok++;
     } catch (e) {
-      toast('图片读取失败：' + f.name);
+      toast(`「${f.name}」处理失败：${friendlyStorageError(e)}`);
     }
   }
   renderCapture();
+  updateTopStatus();
+  if (ok) toast(`已添加 ${ok} 张图片（自动压缩至长边 ${IMAGE_MAX_SIDE}px 内）`);
 }
 
 function renderCapture(){
@@ -496,15 +687,24 @@ function renderCapture(){
   state.images.slice().reverse().forEach(im => {
     const d = document.createElement('div');
     d.className = 'thumb' + (im.id === cur ? ' active' : '');
+    d.setAttribute('role', 'button');
+    d.tabIndex = 0;
+    d.setAttribute('aria-label', `选择图片 ${im.name || im.id}`);
     const i = document.createElement('img');
+    i.alt = im.name || '试卷缩略图';
     i.src = imgURL(im.id);
     d.appendChild(i);
-    d.onclick = () => {
+    const pick = () => {
       state.capture.currentImageId = im.id;
       state.capture.pendingBox = null;
       state.capture.aiQueue = [];
       $('#boxFormCard').hidden = true;
+      $('#kbdBoxCard').hidden = true;
       renderCapture();
+    };
+    d.onclick = pick;
+    d.onkeydown = e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); }
     };
     thumbs.appendChild(d);
   });
@@ -513,7 +713,42 @@ function renderCapture(){
   if (!cur) { stageCard.hidden = true; $('#boxFormCard').hidden = true; return; }
   stageCard.hidden = false;
   $('#stageImg').src = imgURL(cur);
+  const meta = state.images.find(i => i.id === cur);
+  const linked = state.questions.filter(q => q.imageId === cur).length;
+  $('#imageInfo').textContent = meta
+    ? `${meta.w}×${meta.h} · 已收录 ${linked} 题${meta.compressed ? ' · 已压缩' : ''}`
+    : '';
   renderBoxes();
+}
+
+/* 单张图片及其题目一起删除，避免 IndexedDB 里堆积再也用不到的原图 */
+async function deleteCurrentImage(){
+  const id = state.capture.currentImageId;
+  if (!id) return;
+  const linked = state.questions.filter(q => q.imageId === id);
+  const msg = linked.length
+    ? `这张图片下有 ${linked.length} 道已收录的题，删除图片会一并删除这些题。确定继续？`
+    : '删除这张图片？';
+  if (!confirm(msg)) return;
+  try {
+    for (const q of linked) await idbDel('questions', q.id);
+    await idbDel('images', id);
+  } catch (e) {
+    toast('删除失败：' + friendlyStorageError(e));
+    return;
+  }
+  const url = urlCache.get(id);
+  if (url) URL.revokeObjectURL(url);
+  urlCache.delete(id);
+  state.images = state.images.filter(i => i.id !== id);
+  state.questions = state.questions.filter(q => q.imageId !== id);
+  state.capture.currentImageId = state.images.length ? state.images[state.images.length - 1].id : null;
+  state.capture.pendingBox = null;
+  state.capture.aiQueue = [];
+  $('#boxFormCard').hidden = true;
+  renderCapture(); renderBank(); renderReviewHome(); renderStats(); renderPaperList();
+  updateTopStatus();
+  toast('已删除图片及其题目');
 }
 
 /* ================= 录题：框选 ================= */
@@ -593,6 +828,19 @@ function showBoxForm(){
   $('#boxFormCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+/* 不用鼠标也能框题：填四个百分比坐标 */
+function applyKeyboardBox(){
+  if (state.capture.pendingBox) { toast('请先收录或取消当前这道题'); return; }
+  const num = sel => clamp((Number($(sel).value) || 0) / 100, 0, 1);
+  const x = num('#kbX'), y = num('#kbY'), w = num('#kbW'), h = num('#kbH');
+  if (w < 0.02 || h < 0.02 || x + w > 1.001 || y + h > 1.001) {
+    toast('坐标超出图片范围，请检查四个数值');
+    return;
+  }
+  state.capture.pendingBox = { x, y, w, h };
+  showBoxForm();
+}
+
 async function saveBox(){
   const b = state.capture.pendingBox;
   const imgId = state.capture.currentImageId;
@@ -614,11 +862,17 @@ async function saveBox(){
     lapses: 0,
     lastReviewedAt: null,
   };
-  await idbPut('questions', q);
+  try {
+    await idbPut('questions', q);
+  } catch (e) {
+    toast('收录失败：' + friendlyStorageError(e));
+    return;
+  }
   state.questions.push(q);
   state.capture.pendingBox = null;
   $('#fNote').value = '';
-  renderBoxes();
+  renderCapture();
+  updateTopStatus();
   toast('已收录：' + q.knowledge);
 
   if (state.capture.aiQueue.length) {
@@ -714,6 +968,26 @@ function renderReviewCard(){
   holder.appendChild(cropEl(q));
   $('#reviewNoteText').textContent = q.note || '（无备注）';
   $('#reviewNote').open = false;
+  $('#judgeBox').hidden = !settings.aiEnabled;
+  $('#judgeAnswer').value = '';
+  $('#judgeResult').hidden = true;
+  $('#judgeResult').textContent = '';
+}
+
+/* AI 判分仅作参考，不自动改写掌握度，最终仍由用户四档自评 */
+async function runJudge(){
+  const q = state.review.queue[state.review.idx];
+  if (!q) return;
+  const box = $('#judgeResult');
+  box.hidden = false;
+  box.textContent = 'AI 判分中…';
+  try {
+    const r = await withAICall($('#judgeBtn'), 'AI 判分中…（点击取消）', () => aiJudge(q, $('#judgeAnswer').value.trim()));
+    if (!r) { box.textContent = '已取消'; return; }
+    box.textContent = `${r.correct ? '看起来做对了' : '可能还有问题'}：${r.reason || '（模型未给出说明）'}`;
+  } catch (e) {
+    box.textContent = '判分失败：' + e.message;
+  }
 }
 
 async function grade(g){
@@ -774,13 +1048,14 @@ function renderPaperList(){
   box.innerHTML = '';
   if (!list.length) { box.innerHTML = '<div class="empty">没有可组卷的题</div>'; return; }
 
-  list.forEach(q => {
+  list.forEach((q, i) => {
     const row = document.createElement('label');
     row.className = 'paperRow';
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = true;
     cb.value = q.id;
+    cb.setAttribute('aria-label', `选择第 ${i + 1} 题：${q.knowledge}`);
     row.appendChild(cb);
     row.appendChild(cropEl(q));
     const t = document.createElement('span');
@@ -790,7 +1065,7 @@ function renderPaperList(){
   });
 }
 
-function buildPaper(){
+async function buildPaper(){
   const ids = [...$('#paperList').querySelectorAll('input:checked')].map(i => i.value);
   const qs = ids.map(id => state.questions.find(q => q.id === id)).filter(Boolean);
   if (!qs.length) { toast('请至少勾选一道题'); return; }
@@ -815,7 +1090,7 @@ function buildPaper(){
     item.appendChild(head);
     item.appendChild(cropEl(q));
 
-    if (mode === 'blank') {
+    if (mode === 'blank' || mode === 'self') {
       const space = document.createElement('div');
       space.className = 'printSpace';
       item.appendChild(space);
@@ -828,89 +1103,238 @@ function buildPaper(){
     area.appendChild(item);
   });
 
+  /* 自测卷：答案单独放到最后一页，做题时看不到 */
+  if (mode === 'self') {
+    const sheet = document.createElement('div');
+    sheet.className = 'printAnswers';
+    const h2 = document.createElement('h2');
+    h2.textContent = '参考答案 / 解析';
+    sheet.appendChild(h2);
+    qs.forEach((q, i) => {
+      const line = document.createElement('div');
+      line.className = 'printAnswerLine';
+      line.textContent = `${i + 1}. ${q.knowledge || ''}：${q.note || '（未填写答案 / 解析）'}`;
+      sheet.appendChild(line);
+    });
+    area.appendChild(sheet);
+  }
+
+  /* 先让打印区参与布局，图片才会开始加载；等解码完成再唤起打印 */
+  area.style.display = 'block';
+  area.style.position = 'fixed';
+  area.style.left = '-10000px';
+  area.style.top = '0';
+  toast('正在准备打印…');
+  await waitForImages(area);
+  area.removeAttribute('style');
   window.print();
 }
 
 /* ================= 设置 / 数据 ================= */
 const SETTINGS_KEY = 'cuoti-mvp-settings';
-/* 默认直连 DeepSeek 官方 API，视觉模型 deepseek-flash */
+const KEY_STORE = 'cuoti-mvp-ai-key';
+/* 默认走本地代理：密钥只在服务端环境变量里，浏览器永远拿不到 */
 const settings = {
   aiEnabled: false,
+  aiMode: 'proxy',
   aiBase: 'https://api.deepseek.com',
   aiKey: '',
   aiModel: 'deepseek-flash',
   aiPath: '/chat/completions',
+  rememberKey: false,
 };
 
-function loadSettings(){
-  try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) {}
-  $('#aiEnabled').checked = settings.aiEnabled;
-  $('#aiBase').value = settings.aiBase;
-  $('#aiKey').value = settings.aiKey;
-  $('#aiModel').value = settings.aiModel;
-  $('#aiPath').value = settings.aiPath || '/chat/completions';
+function settingsWithoutKey(){
+  const { aiKey, ...rest } = settings;
+  return rest;
+}
+
+function readStoredKey(){
+  try {
+    return localStorage.getItem(KEY_STORE) || sessionStorage.getItem(KEY_STORE) || '';
+  } catch { return ''; }
+}
+
+function refreshAIUI(){
+  const direct = settings.aiMode === 'direct';
+  $('#directFields').hidden = !direct;
   $('#aiDetectBtn').hidden = !settings.aiEnabled;
   $('#aiSuggestBtn').hidden = !settings.aiEnabled;
+  $('#judgeBox').hidden = !settings.aiEnabled || $('#reviewCard').hidden;
+  const warn = $('#aiModeWarn');
+  warn.hidden = !direct;
+  if (direct) {
+    warn.textContent = '直连模式会让 API Key 暴露给浏览器中运行的脚本，只适合本机单人使用；公开部署请改用本地代理。未勾选「记住 Key」时，密钥仅保存在当前标签页会话内。';
+  }
+  $('#privacyHint').textContent = settings.aiEnabled
+    ? '已启用 AI：自动框选 / 建议知识点 / 判分会把对应图片发送给你所配置的 API 服务；其余时间图片只存在本机浏览器里。'
+    : '支持一次多选；未启用 AI 时，图片只存在本机浏览器里，不上传任何服务器。';
+}
+
+function loadSettings(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    /* 旧版本把 Key 明文写在设置里：迁移时丢弃，不再载入 */
+    const { aiKey: _legacyKey, ...rest } = saved;
+    Object.assign(settings, rest);
+  } catch (e) { /* 设置损坏则用默认值 */ }
+  if (!['proxy', 'direct'].includes(settings.aiMode)) settings.aiMode = 'proxy';
+  settings.aiKey = readStoredKey();
+  $('#aiEnabled').checked = Boolean(settings.aiEnabled);
+  $('#aiMode').value = settings.aiMode;
+  $('#aiBase').value = settings.aiBase;
+  $('#aiPath').value = settings.aiPath || '/chat/completions';
+  $('#aiModel').value = settings.aiModel || 'deepseek-flash';
+  $('#aiKey').value = settings.aiKey;
+  $('#rememberKey').checked = Boolean(settings.rememberKey);
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsWithoutKey())); } catch (e) { /* 存储不可用时忽略 */ }
+  refreshAIUI();
 }
 
 function saveSettings(){
+  const direct = $('#aiMode').value === 'direct';
   settings.aiEnabled = $('#aiEnabled').checked;
+  settings.aiMode = direct ? 'direct' : 'proxy';
   settings.aiBase = $('#aiBase').value.trim() || 'https://api.deepseek.com';
-  settings.aiKey = $('#aiKey').value.trim();
-  settings.aiModel = $('#aiModel').value.trim() || 'deepseek-flash';
   settings.aiPath = $('#aiPath').value.trim() || '/chat/completions';
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  $('#aiDetectBtn').hidden = !settings.aiEnabled;
-  $('#aiSuggestBtn').hidden = !settings.aiEnabled;
+  settings.aiModel = $('#aiModel').value.trim() || 'deepseek-flash';
+  settings.aiKey = direct ? $('#aiKey').value.trim() : '';
+  settings.rememberKey = $('#rememberKey').checked;
+
+  /* 密钥不写进设置对象；默认只留在本标签页会话，勾选后才会长期留存 */
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsWithoutKey()));
+    localStorage.removeItem(KEY_STORE);
+    sessionStorage.removeItem(KEY_STORE);
+    if (settings.aiKey) {
+      (settings.rememberKey ? localStorage : sessionStorage).setItem(KEY_STORE, settings.aiKey);
+    }
+  } catch (e) {
+    toast('设置保存失败：' + friendlyStorageError(e));
+    return;
+  }
+  refreshAIUI();
+  updateTopStatus();
   toast('设置已保存');
 }
 
 async function exportData(){
   const imgs = await idbAll('images');
-  const data = { version: 1, exportedAt: Date.now(), images: [], questions: state.questions };
+  const data = { version: 2, exportedAt: Date.now(), images: [], questions: state.questions };
   for (const im of imgs) {
-    data.images.push({ id: im.id, name: im.name, w: im.w, h: im.h, createdAt: im.createdAt, data: await blobToDataURL(im.blob) });
+    data.images.push({
+      id: im.id, name: im.name, w: im.w, h: im.h, createdAt: im.createdAt,
+      compressed: Boolean(im.compressed), data: await blobToDataURL(im.blob),
+    });
   }
-  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const json = JSON.stringify(data);
+  if (json.length > 40 * 1024 * 1024 && !confirm('备份文件较大（超过 40MB），仍要导出吗？')) return;
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
   a.download = `cuoti-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
   a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  toast(`已导出 ${state.questions.length} 道题、${imgs.length} 张图`);
 }
 
 async function importData(file){
-  const text = await file.text();
-  const data = JSON.parse(text);
-  if (!Array.isArray(data.images) || !Array.isArray(data.questions)) throw new Error('文件格式不正确');
-  for (const im of data.images) {
-    await idbPut('images', { id: im.id, blob: dataURLToBlob(im.data), name: im.name, w: im.w, h: im.h, createdAt: im.createdAt });
+  const data = validateBackup(JSON.parse(await file.text()));
+  if (!confirm(`将导入 ${data.questions.length} 道题、${data.images.length} 张图片；同一 ID 的记录会被覆盖。继续？`)) return;
+  try {
+    for (const im of data.images) {
+      await idbPut('images', {
+        id: im.id, blob: dataURLToBlob(im.data), name: im.name, w: im.w, h: im.h,
+        createdAt: im.createdAt, compressed: im.compressed,
+      });
+    }
+    for (const q of data.questions) await idbPut('questions', q);
+  } catch (e) {
+    toast('导入中断：' + friendlyStorageError(e));
+    return;
   }
-  for (const q of data.questions) await idbPut('questions', q);
   await loadAll();
+  if (state.capture.currentImageId && !state.images.some(i => i.id === state.capture.currentImageId)) {
+    state.capture.currentImageId = state.images.length ? state.images[state.images.length - 1].id : null;
+  }
+  state.capture.pendingBox = null;
+  state.capture.aiQueue = [];
   renderCapture(); renderBank(); renderReviewHome(); renderStats(); renderPaperList();
-  toast('导入完成');
+  updateTopStatus();
+  toast(`导入完成：${data.questions.length} 道题`);
 }
 
 async function clearAll(){
   if (!confirm('确定清空所有图片和题目？不可恢复。')) return;
-  await idbClear('images');
-  await idbClear('questions');
+  try {
+    await idbClear('images');
+    await idbClear('questions');
+  } catch (e) {
+    toast('清空失败：' + friendlyStorageError(e));
+    return;
+  }
   urlCache.forEach(u => URL.revokeObjectURL(u));
   urlCache.clear();
   state.images = [];
   state.questions = [];
   state.capture = { currentImageId: null, pendingBox: null, aiQueue: [] };
+  state.review = { queue: [], idx: 0 };
   renderCapture(); renderBank(); renderReviewHome(); renderStats(); renderPaperList();
+  updateTopStatus();
   toast('已清空');
 }
 
 /* ================= DeepSeek 调用 ================= */
+const AI_TIMEOUT_MS = 60_000;
+let aiController = null;
+
+class AICancelled extends Error {
+  constructor(){ super('已取消'); this.name = 'AICancelled'; }
+}
+
+/* 按钮在请求期间变成「取消」：再次点击即中断；失败由调用方展示 */
+async function withAICall(btn, busyText, task){
+  if (aiController) {
+    aiController.abort(new AICancelled());
+    toast('已取消');
+    return undefined;
+  }
+  const idle = btn.innerHTML;
+  btn.innerHTML = busyText;
+  try {
+    return await task();
+  } catch (e) {
+    if (e?.name === 'AICancelled' || e?.name === 'AbortError') {
+      toast('已取消');
+      return undefined;
+    }
+    throw e;
+  } finally {
+    btn.innerHTML = idle;
+  }
+}
+
+/* 代理模式由服务端注入密钥；直连模式才在浏览器里带 Authorization */
 async function callDeepSeek(messages, { json = false, maxTokens = 1200 } = {}){
   if (!settings.aiEnabled) throw new Error('请先在「设置」里启用 AI');
-  if (!settings.aiKey) throw new Error('请先在「设置」里填写 DeepSeek API Key');
-  const base = settings.aiBase.replace(/\/+$/, '');
-  const path = settings.aiPath.startsWith('/') ? settings.aiPath : '/' + settings.aiPath;
+  const proxy = settings.aiMode !== 'direct';
+  if (!proxy && !settings.aiKey) throw new Error('请先在「设置」里填写 DeepSeek API Key');
+
+  let url, headers;
+  if (proxy) {
+    if (location.protocol === 'file:') {
+      throw new Error('代理模式需要本地服务：请用 npm start 启动后访问 http 地址，或改用直连模式');
+    }
+    url = new URL('api/deepseek', location.href);
+    headers = { 'Content-Type': 'application/json' };
+  } else {
+    const base = settings.aiBase.replace(/\/+$/, '');
+    const path = settings.aiPath.startsWith('/') ? settings.aiPath : '/' + settings.aiPath;
+    url = base + path;
+    headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + settings.aiKey };
+  }
+
   const body = {
     model: settings.aiModel || 'deepseek-flash',
     messages,
@@ -920,35 +1344,59 @@ async function callDeepSeek(messages, { json = false, maxTokens = 1200 } = {}){
   };
   if (json) body.response_format = { type: 'json_object' };
 
-  const res = await fetch(base + path, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + settings.aiKey,
-    },
-    body: JSON.stringify(body),
-  });
+  const ctrl = new AbortController();
+  aiController = ctrl;
+  const timeoutErr = new Error('请求超时，请稍后重试');
+  timeoutErr.noRetry = true;
+  const timer = setTimeout(() => ctrl.abort(timeoutErr), AI_TIMEOUT_MS);
 
-  if (!res.ok) {
-    let detail = '';
-    try { detail = (await res.json())?.error?.message || ''; } catch (e) {}
-    throw new Error(`DeepSeek 请求失败 ${res.status}${detail ? '：' + detail : ''}`);
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: ctrl.signal,
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          let detail = '';
+          try { detail = JSON.parse(text)?.error?.message || ''; } catch { detail = text.slice(0, 120); }
+          if (proxy && (res.status === 404 || /text\/html/i.test(res.headers.get('content-type') || ''))) {
+            throw new Error('未找到本地 AI 代理：请用 npm start 启动服务，或改用直连模式');
+          }
+          const err = new Error(`DeepSeek 请求失败 ${res.status}${detail ? '：' + detail : ''}`);
+          err.retryable = res.status >= 500;
+          throw err;
+        }
+        const data = await res.json();
+        const content = data.choices?.[0]?.message?.content || '';
+        if (!content) throw new Error('DeepSeek 返回内容为空');
+        return content;
+      } catch (e) {
+        if (e?.noRetry || e?.name === 'AICancelled' || e?.name === 'AbortError' || attempt === 1) throw e;
+        if (!e?.retryable && !/failed to fetch|network|load failed/i.test(String(e.message))) throw e;
+        await new Promise(r => setTimeout(r, 600));
+      }
+    }
+  } finally {
+    clearTimeout(timer);
+    if (aiController === ctrl) aiController = null;
   }
-  const data = await res.json();
-  const content = data.choices?.[0]?.message?.content || '';
-  if (!content) throw new Error('DeepSeek 返回内容为空');
-  return content;
 }
 
 /* 测试连接：发一条最小的文本请求 */
 async function testDeepSeek(){
   try {
     saveSettings();
+    if (!settings.aiEnabled) { toast('请先启用 AI'); return; }
     toast('测试中…');
-    const content = await callDeepSeek([
+    const content = await withAICall($('#testAIBtn'), '测试中…（点击取消）', () => callDeepSeek([
       { role: 'system', content: '你是连通性测试助手，只输出 JSON。' },
       { role: 'user', content: '请只返回 {"ok":true,"model":"<你的模型名>"}，不要任何多余文字。' },
-    ], { json: true, maxTokens: 60 });
+    ], { json: true, maxTokens: 60 }));
+    if (!content) return;
     const obj = parseJSONSafe(content);
     toast(`连接成功：${obj.model || settings.aiModel}`);
   } catch (e) {
@@ -960,13 +1408,13 @@ async function testDeepSeek(){
 async function aiDetect(){
   const imgId = state.capture.currentImageId;
   if (!imgId) { toast('请先选择一张图片'); return; }
+  if (state.capture.pendingBox) { toast('请先收录或取消当前这道题'); return; }
   try {
     toast('DeepSeek 识别题目中…');
-    const img = state.images.find(i => i.id === imgId);
-    const blob = await (await fetch(imgURL(imgId))).blob();
-    const dataUrl = await blobToDataURL(blob);
+    /* 整图先缩放，避免把手机原图的 base64 整块塞进请求体 */
+    const dataUrl = await imageToScaledDataURL(imgId);
 
-    const content = await callDeepSeek([
+    const content = await withAICall($('#aiDetectBtn'), '识别中…（点击取消）', () => callDeepSeek([
       {
         role: 'system',
         content: [
@@ -982,11 +1430,12 @@ async function aiDetect(){
       {
         role: 'user',
         content: [
-          { type: 'text', text: `请检测这张试卷图片中的题目，图片原始尺寸约 ${img.w}×${img.h}。` },
+          { type: 'text', text: `请检测这张试卷图片中的题目，图片已等比缩放至长边不超过 ${AI_IMAGE_MAX_SIDE}px。` },
           { type: 'image_url', image_url: { url: dataUrl } },
         ],
       },
-    ], { json: true, maxTokens: 1500 });
+    ], { json: true, maxTokens: 1500 }));
+    if (!content) return;
 
     const parsed = parseJSONSafe(content);
     const boxes = Array.isArray(parsed.boxes) ? parsed.boxes : [];
@@ -999,13 +1448,14 @@ async function aiDetect(){
         w: clamp(Number(b.w) || 0, 0, 1),
         h: clamp(Number(b.h) || 0, 0, 1),
       }))
-      .filter(b => b.w > 0.02 && b.h > 0.02)
+      .filter(b => b.w > 0.02 && b.h > 0.02 && b.x + b.w <= 1.001 && b.y + b.h <= 1.001)
       .sort((a, b) => a.y - b.y);
 
     if (!state.capture.aiQueue.length) throw new Error('识别结果无效');
+    const total = state.capture.aiQueue.length;
     state.capture.pendingBox = state.capture.aiQueue.shift();
     showBoxForm();
-    toast(`识别到 ${boxes.length} 道题，请逐题确认`);
+    toast(`识别到 ${total} 道题，请逐题确认`);
   } catch (e) {
     toast(e.message || 'AI 识别失败');
   }
@@ -1021,7 +1471,7 @@ async function aiSuggestMeta(){
     const tmpQ = { imageId: imgId, box: b };
     const dataUrl = await cropToDataURL(tmpQ, 1000);
 
-    const content = await callDeepSeek([
+    const content = await withAICall($('#aiSuggestBtn'), '分析中…（点击取消）', () => callDeepSeek([
       {
         role: 'system',
         content: [
@@ -1041,7 +1491,8 @@ async function aiSuggestMeta(){
           { type: 'image_url', image_url: { url: dataUrl } },
         ],
       },
-    ], { json: true, maxTokens: 500 });
+    ], { json: true, maxTokens: 500 }));
+    if (!content) return;
 
     const obj = parseJSONSafe(content);
     if (obj.subject) $('#fSubject').value = obj.subject;
@@ -1057,11 +1508,8 @@ async function aiSuggestMeta(){
   }
 }
 
-/*
- * 预留：AI 判分
- * 用法：把题目裁剪图 + 孩子答案文本传给 DeepSeek，返回 {correct, reason}
- * 注意：手写步骤/几何图的自动判分可靠性有限，建议始终保留“家长确认”这一步
- */
+/* AI 判分：已接入复习页。手写步骤/几何图的识别可靠性有限，结果只作参考，
+   不自动改写掌握度，最终仍由用户四档自评确认。 */
 async function aiJudge(q, studentAnswer){
   const dataUrl = await cropToDataURL(q, 1200);
   const content = await callDeepSeek([
@@ -1083,12 +1531,19 @@ async function aiJudge(q, studentAnswer){
       ],
     },
   ], { json: true, maxTokens: 400 });
-  return parseJSONSafe(content);
+  const r = parseJSONSafe(content);
+  return {
+    correct: r.correct === true || r.correct === 'true',
+    reason: String(r.reason || ''),
+  };
 }
 
 /* ================= 事件绑定 ================= */
 function bindEvents(){
-  $$('#tabs button').forEach(b => b.onclick = () => switchView(b.dataset.view));
+  $$('#tabs button').forEach(b => b.onclick = () => {
+    $$('#tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+    switchView(b.dataset.view);
+  });
 
   $('#fileInput').addEventListener('change', async e => {
     if (e.target.files?.length) await handleFiles([...e.target.files]);
@@ -1103,11 +1558,19 @@ function bindEvents(){
     renderBoxes();
   };
   $('#aiSuggestBtn').onclick = aiSuggestMeta;
+  $('#kbdBoxBtn').onclick = () => {
+    const card = $('#kbdBoxCard');
+    card.hidden = !card.hidden;
+    $('#kbdBoxBtn').setAttribute('aria-expanded', String(!card.hidden));
+  };
+  $('#applyKbdBoxBtn').onclick = applyKeyboardBox;
+  $('#deleteImageBtn').onclick = deleteCurrentImage;
 
   $('#bankCause').onchange = renderBank;
   $('#bankKw').oninput = renderBank;
 
   $('#startReviewBtn').onclick = startReview;
+  $('#judgeBtn').onclick = runJudge;
   $('#reviewCard').querySelectorAll('.grade').forEach(btn => {
     btn.onclick = () => grade(btn.dataset.grade);
   });
@@ -1115,6 +1578,8 @@ function bindEvents(){
   $('#paperScope').onchange = renderPaperList;
   $('#buildPaperBtn').onclick = buildPaper;
 
+  $('#aiMode').onchange = () => { settings.aiMode = $('#aiMode').value; refreshAIUI(); };
+  $('#aiEnabled').onchange = () => { settings.aiEnabled = $('#aiEnabled').checked; refreshAIUI(); };
   $('#saveSettingsBtn').onclick = saveSettings;
   $('#testAIBtn').onclick = testDeepSeek;
   $('#exportBtn').onclick = exportData;
@@ -1130,22 +1595,39 @@ function bindEvents(){
 
 /* ================= 启动 ================= */
 async function init(){
+  if (location.protocol === 'file:') {
+    const w = $('#envWarn');
+    w.hidden = false;
+    w.textContent = '当前以 file:// 打开：部分浏览器会限制本地数据库，且代理模式不可用。建议执行 npm start 后访问 http://127.0.0.1:8080/';
+  }
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('./sw.js').catch(() => { /* 离线增强失败不影响使用 */ });
+  }
   await openDB();
   await loadAll();
   loadSettings();
   setupStage();
   bindEvents();
+  $$('.view').forEach(v => v.setAttribute('role', 'tabpanel'));
+  $('#paperScope').setAttribute('aria-label', '组卷范围');
+  $('#paperMode').setAttribute('aria-label', '卷型');
+  $('#bankCause').setAttribute('aria-label', '按错因筛选');
+  $('#bankKw').setAttribute('aria-label', '搜索知识点或备注');
   renderCapture();
   renderBank();
   renderReviewHome();
   renderStats();
   renderPaperList();
-  $('#topStatus').textContent = `本地存储 · ${state.questions.length} 道题 · DeepSeek 可选`;
+  updateTopStatus();
 }
 
 init().catch(err => {
   console.error(err);
-  document.body.insertAdjacentHTML('beforeend', '<div style="padding:20px;color:#b00">初始化失败：' + esc(err.message) + '</div>');
+  const hint = /quota|storage|security|denied|占用/i.test(String(err.message))
+    ? '浏览器拒绝了本地存储。请退出无痕模式、检查站点存储权限，或关闭其它标签页后重试。'
+    : err.message;
+  document.body.insertAdjacentHTML('beforeend',
+    '<div class="warnBox" style="margin:16px;color:#b00">初始化失败：' + esc(hint) + '（原有数据未被删除）</div>');
 });
 </script>
 </body>

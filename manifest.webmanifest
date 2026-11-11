@@ -1,0 +1,19 @@
+{
+  "name": "错题舱",
+  "short_name": "错题舱",
+  "description": "本地优先的错题收录、间隔复习与组卷工具",
+  "lang": "zh-CN",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#3b6ef6",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

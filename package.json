@@ -1,0 +1,14 @@
+{
+  "name": "cuoti-cabin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "错题舱：本地优先的错题收录、间隔复习与组卷工具（零运行时依赖）",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="错题舱图标">
+  <rect width="192" height="192" rx="42" fill="#3b6ef6"/>
+  <path d="M48 40h72a16 16 0 0 1 16 16v96H64a16 16 0 0 1-16-16z" fill="#fff"/>
+  <path d="M48 136a16 16 0 0 1 16-16h72v32H64a16 16 0 0 1-16-16z" fill="#dfe8ff"/>
+  <path d="M70 72h40M70 92h32" stroke="#c9d6f7" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="132" cy="126" r="30" fill="#16a34a"/>
+  <path d="m119 126 9 9 18-19" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
